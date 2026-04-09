@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Claude Council — Session Viewer</title>
+<style>
+  :root {
+    --bg:       #0c0e14;
+    --bg-card:  #13161f;
+    --bg-hover: #1a1e2a;
+    --bg-code:  #1a1e2a;
+    --text:     #d4d4d8;
+    --text2:    #71717a;
+    --text3:    #52525b;
+    --accent:   #818cf8;
+    --accent2:  #6366f1;
+    --green:    #34d399;
+    --green-bg: rgba(52,211,153,0.08);
+    --yellow:   #fbbf24;
+    --yellow-bg:rgba(251,191,36,0.08);
+    --red:      #f87171;
+    --red-bg:   rgba(248,113,113,0.08);
+    --blue:     #60a5fa;
+    --blue-bg:  rgba(96,165,250,0.08);
+    --purple:   #a78bfa;
+    --border:   #1e2130;
+    --border2:  #2a2e3f;
+    --radius:   16px;
+    --radius-sm:10px;
+    --shadow:   0 1px 3px rgba(0,0,0,0.3), 0 1px 2px rgba(0,0,0,0.2);
+  }
+  [data-theme="light"] {
+    --bg:       #f8f9fb;
+    --bg-card:  #ffffff;
+    --bg-hover: #f3f4f6;
+    --bg-code:  #f1f3f5;
+    --text:     #1a1a2e;
+    --text2:    #6b7280;
+    --text3:    #9ca3af;
+    --border:   #e5e7eb;
+    --border2:  #d1d5db;
+    --shadow:   0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+    --green-bg: rgba(52,211,153,0.1);
+    --yellow-bg:rgba(251,191,36,0.1);
+    --red-bg:   rgba(248,113,113,0.1);
+    --blue-bg:  rgba(96,165,250,0.1);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .container {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 2.5rem 1.5rem 4rem;
+  }
+
+  /* ── Header ── */
+  .header {
+    margin-bottom: 2.5rem;
+  }
+  .header-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+  }
+  .logo {
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+  .theme-btn {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 99px;
+    padding: 6px 14px;
+    color: var(--text2);
+    cursor: pointer;
+    font-size: 0.8rem;
+    transition: all 0.2s;
+  }
+  .theme-btn:hover { border-color: var(--border2); color: var(--text); }
+  .question-block {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.5rem 1.75rem;
+    font-size: 1.15rem;
+    font-weight: 500;
+    line-height: 1.5;
+    box-shadow: var(--shadow);
+  }
+  .meta-row {
+    display: flex;
+    gap: 1.25rem;
+    margin-top: 0.75rem;
+    font-size: 0.78rem;
+    color: var(--text3);
+  }
+  .meta-row span { display: flex; align-items: center; gap: 4px; }
+
+  /* ── Tabs ── */
+  .tab-bar {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 1.5rem;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0;
+    overflow-x: auto;
+  }
+  .tab {
+    padding: 10px 18px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--text2);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.15s;
+    white-space: nowrap;
+    user-select: none;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+  .panel { display: none; }
+  .panel.active { display: block; animation: fadeIn 0.2s ease; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+  /* ── Cards ── */
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.75rem;
+    margin-bottom: 1.25rem;
+    box-shadow: var(--shadow);
+  }
+  .card-title {
+    font-size: 1.05rem;
+    font-weight: 600;
+    margin-bottom: 1.25rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .card-section {
+    margin-top: 1.25rem;
+  }
+  .card-section-title {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text2);
+    margin-bottom: 0.5rem;
+  }
+
+  /* ── Verdict card ── */
+  .verdict-card {
+    border-color: var(--accent);
+    border-width: 1px;
+    background: linear-gradient(135deg, var(--bg-card) 0%, var(--bg-hover) 100%);
+  }
+  .verdict-text {
+    font-size: 1.1rem;
+    font-weight: 500;
+    line-height: 1.6;
+    margin-bottom: 1.25rem;
+  }
+
+  /* ── Confidence bars ── */
+  .confidence-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 8px;
+    font-size: 0.85rem;
+  }
+  .confidence-label { width: 120px; color: var(--text2); font-weight: 500; }
+  .confidence-track {
+    flex: 1;
+    height: 6px;
+    background: var(--bg-code);
+    border-radius: 3px;
+    overflow: hidden;
+    max-width: 200px;
+  }
+  .confidence-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.6s ease;
+  }
+  .confidence-pct {
+    width: 40px;
+    text-align: right;
+    font-weight: 600;
+    font-size: 0.8rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ── Tag/badge items ── */
+  .consensus-item, .divergence-item {
+    padding: 0.85rem 1rem;
+    border-radius: var(--radius-sm);
+    margin-bottom: 0.5rem;
+  }
+  .consensus-item {
+    background: var(--green-bg);
+    border-left: 3px solid var(--green);
+  }
+  .divergence-item {
+    background: var(--yellow-bg);
+    border-left: 3px solid var(--yellow);
+  }
+  .item-point { font-weight: 500; margin-bottom: 4px; }
+  .item-meta { font-size: 0.8rem; color: var(--text2); }
+  .item-resolution { font-size: 0.85rem; color: var(--accent); font-style: italic; margin-top: 6px; }
+
+  .agent-badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 99px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin-right: 4px;
+    margin-bottom: 4px;
+  }
+  .badge-architect     { background: var(--blue-bg);   color: var(--blue); }
+  .badge-pragmatist    { background: var(--green-bg);  color: var(--green); }
+  .badge-security-perf { background: var(--red-bg);    color: var(--red); }
+
+  /* ── Lists ── */
+  .detail-list {
+    list-style: none;
+    padding: 0;
+  }
+  .detail-list li {
+    padding: 5px 0;
+    font-size: 0.9rem;
+    color: var(--text);
+    display: flex;
+    gap: 8px;
+    line-height: 1.55;
+  }
+  .detail-list li .bullet {
+    flex-shrink: 0;
+    width: 18px;
+    text-align: center;
+    color: var(--text3);
+    font-size: 0.8rem;
+    padding-top: 2px;
+  }
+  .detail-list.pros .bullet { color: var(--green); }
+  .detail-list.cons .bullet { color: var(--red); }
+  .detail-list.evidence .bullet { color: var(--accent); }
+  .detail-list.triggers .bullet { color: var(--yellow); }
+  .detail-list.numbered .bullet { color: var(--text2); font-weight: 600; }
+  .detail-list.actions .bullet { color: var(--accent); font-weight: 600; }
+
+  /* ── Tradeoffs grid ── */
+  .tradeoffs-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+  }
+  @media (max-width: 600px) { .tradeoffs-grid { grid-template-columns: 1fr; } }
+  .tradeoffs-col { padding: 1rem; border-radius: var(--radius-sm); }
+  .tradeoffs-col.pros-col { background: var(--green-bg); }
+  .tradeoffs-col.cons-col { background: var(--red-bg); }
+  .tradeoffs-col-title { font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem; }
+  .pros-col .tradeoffs-col-title { color: var(--green); }
+  .cons-col .tradeoffs-col-title { color: var(--red); }
+
+  /* ── Review scores ── */
+  .review-agent-block {
+    background: var(--bg-code);
+    border-radius: var(--radius-sm);
+    padding: 1rem 1.25rem;
+    margin-bottom: 0.75rem;
+  }
+  .review-agent-name { font-weight: 600; margin-bottom: 0.5rem; }
+  .scores-row {
+    display: flex;
+    gap: 1.25rem;
+    font-size: 0.85rem;
+    margin-bottom: 0.5rem;
+  }
+  .score-item { display: flex; align-items: center; gap: 4px; }
+  .score-label { color: var(--text2); }
+  .score-val { font-weight: 700; }
+
+  /* ── Action items ── */
+  .action-list { list-style: none; padding: 0; }
+  .action-list li {
+    padding: 8px 0;
+    font-size: 0.9rem;
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+  }
+  .action-num {
+    background: var(--accent);
+    color: #fff;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+  .action-item-card {
+    background: var(--bg-code);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 0.75rem 1rem;
+    margin-bottom: 0.5rem;
+  }
+  .action-item-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 0.4rem;
+  }
+  .prio-badge {
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 2px 8px;
+    border-radius: 10px;
+    color: #fff;
+  }
+  .prio-high { background: var(--red); }
+  .prio-medium { background: var(--yellow); color: #000; }
+  .prio-low { background: var(--green); }
+  .type-badge {
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 2px 8px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    color: var(--text2);
+  }
+  .action-item-text { font-size: 0.9rem; line-height: 1.5; }
+  .ai-prompt-block {
+    margin-top: 0.5rem;
+    position: relative;
+  }
+  .ai-prompt-toggle {
+    font-size: 0.75rem;
+    color: var(--accent);
+    cursor: pointer;
+    border: none;
+    background: none;
+    padding: 0;
+    font-family: inherit;
+  }
+  .ai-prompt-toggle:hover { text-decoration: underline; }
+  .ai-prompt-content {
+    display: none;
+    margin-top: 0.4rem;
+    background: var(--bg);
+    border: 1px solid var(--accent);
+    border-radius: var(--radius-sm);
+    padding: 0.75rem 1rem;
+    font-size: 0.82rem;
+    line-height: 1.5;
+    position: relative;
+    white-space: pre-wrap;
+  }
+  .ai-prompt-content.visible { display: block; }
+  .copy-btn {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    font-size: 0.7rem;
+    padding: 3px 8px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: var(--bg-card);
+    color: var(--text2);
+    cursor: pointer;
+  }
+  .copy-btn:hover { background: var(--accent); color: #fff; }
+
+  /* ── Empty state ── */
+  .empty { color: var(--text3); font-style: italic; font-size: 0.9rem; padding: 1rem 0; }
+
+  /* ── Inline markdown rendering ── */
+  code {
+    background: var(--bg-code);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+    font-size: 0.82em;
+    color: var(--accent);
+    white-space: nowrap;
+  }
+  pre {
+    background: var(--bg-code);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 1rem 1.25rem;
+    overflow-x: auto;
+    font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+    font-size: 0.82rem;
+    line-height: 1.5;
+    margin: 0.5rem 0;
+    color: var(--text);
+  }
+  pre code {
+    background: none;
+    border: none;
+    padding: 0;
+    font-size: inherit;
+    color: inherit;
+    white-space: pre;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <div class="header-top">
+      <div class="logo">Claude Council</div>
+      <button class="theme-btn" onclick="toggleTheme()">Toggle theme</button>
+    </div>
+    <div class="question-block" id="question"></div>
+    <div class="meta-row" id="meta"></div>
+  </div>
+
+  <div class="tab-bar" id="tabs"></div>
+  <div id="panels"></div>
+
+</div>
+
+<script>
+const META      = __META_JSON__;
+const OPINIONS  = __OPINIONS_JSON__;
+const SYNTHESIS = __SYNTHESIS_JSON__;
+const REVIEWS   = __REVIEWS_JSON__;
+
+const AGENTS = {
+  architect:       { color: 'blue',   icon: '🏗️', label: 'Architect' },
+  pragmatist:      { color: 'green',  icon: '🚀', label: 'Pragmatist' },
+  'security-perf': { color: 'red',    icon: '🛡️', label: 'Security & Perf' },
+};
+
+function esc(s) {
+  if (!s) return '';
+  const d = document.createElement('div');
+  d.textContent = String(s);
+  return d.innerHTML;
+}
+
+function md(s) {
+  if (!s) return '';
+  // First escape HTML for safety
+  let t = esc(s);
+  // Fenced code blocks: ```lang\n...\n```
+  t = t.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) =>
+    `<pre><code>${code.replace(/\n$/, '')}</code></pre>`);
+  // Inline code: `code`
+  t = t.replace(/`([^`\n]+)`/g, '<code>$1</code>');
+  // Bold: **text**
+  t = t.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  // Italic: *text* (but not inside <strong>)
+  t = t.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
+  // Newlines to <br> (but not inside <pre>)
+  t = t.replace(/\n/g, '<br>');
+  // Clean up <br> inside <pre> — restore newlines
+  t = t.replace(/<pre><code>([\s\S]*?)<\/code><\/pre>/g, (_, inner) =>
+    `<pre><code>${inner.replace(/<br>/g, '\n')}</code></pre>`);
+  return t;
+}
+
+function agentBadge(name) {
+  const a = AGENTS[name] || { label: name };
+  return `<span class="agent-badge badge-${name}">${esc(a.label || name)}</span>`;
+}
+
+function confColor(v) {
+  const pct = Math.round(v * 100);
+  return pct >= 80 ? 'var(--green)' : pct >= 60 ? 'var(--yellow)' : 'var(--red)';
+}
+
+function confBar(label, value) {
+  if (value === undefined || value === null) return '';
+  const pct = Math.round((value <= 1 ? value : value / 100) * 100);
+  return `<div class="confidence-row">
+    <div class="confidence-label">${esc(label)}</div>
+    <div class="confidence-track"><div class="confidence-fill" style="width:${pct}%;background:${confColor(value)}"></div></div>
+    <div class="confidence-pct" style="color:${confColor(value)}">${pct}%</div>
+  </div>`;
+}
+
+function listItems(arr, cls, bulletChar) {
+  if (!arr || !arr.length) return '';
+  return `<ul class="detail-list ${cls}">${arr.map((item, i) =>
+    `<li><span class="bullet">${cls === 'numbered' || cls === 'actions' ? (i + 1) : esc(bulletChar)}</span><span>${md(item)}</span></li>`
+  ).join('')}</ul>`;
+}
+
+// ── Meta ──
+document.getElementById('question').textContent = META.question || '';
+document.getElementById('meta').innerHTML = [
+  META.timestamp ? `<span>📅 ${META.timestamp.replace('T', ' ').replace('Z', ' UTC')}</span>` : '',
+  META.elapsed_display ? `<span>⏱️ ${esc(META.elapsed_display)}</span>` : '',
+  META.project ? `<span>📁 ${esc(META.project)}</span>` : '',
+  META.mode ? `<span>⚡ ${esc(META.mode)}</span>` : '',
+  META.id ? `<span>🔑 ${esc(META.id)}</span>` : '',
+].filter(Boolean).join('');
+
+// ── Tab infrastructure ──
+const tabsEl = document.getElementById('tabs');
+const panelsEl = document.getElementById('panels');
+
+function addTab(id, label, active) {
+  const t = document.createElement('div');
+  t.className = 'tab' + (active ? ' active' : '');
+  t.textContent = label;
+  t.dataset.tab = id;
+  t.onclick = () => switchTab(id);
+  tabsEl.appendChild(t);
+}
+function addPanel(id, html, active) {
+  const p = document.createElement('div');
+  p.className = 'panel' + (active ? ' active' : '');
+  p.id = 'panel-' + id;
+  p.innerHTML = html;
+  panelsEl.appendChild(p);
+}
+function switchTab(id) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === id));
+  document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === 'panel-' + id));
+}
+
+// ═══════════════════════════════════════════
+//  VERDICT TAB
+// ═══════════════════════════════════════════
+addTab('verdict', '⚖️ Verdict', true);
+let vh = '';
+
+// Main verdict
+vh += `<div class="card verdict-card">
+  <div class="card-title">⚖️ Council Verdict</div>
+  <div class="verdict-text">${md(SYNTHESIS.verdict || 'No verdict rendered')}</div>`;
+
+// Confidence scores
+if (SYNTHESIS.confidence_scores) {
+  vh += '<div class="card-section"><div class="card-section-title">Confidence</div>';
+  const scores = SYNTHESIS.confidence_scores;
+  // Overall first
+  if (scores.overall !== undefined) vh += confBar('Overall', scores.overall);
+  for (const [k, v] of Object.entries(scores)) {
+    if (k === 'overall') continue;
+    const a = AGENTS[k];
+    vh += confBar(a ? a.label : k, v);
+  }
+  vh += '</div>';
+}
+vh += '</div>';
+
+// Action items — supports string[], {priority,action}[], and full {priority,type,action,ai_prompt}[]
+const actions = SYNTHESIS.action_items || [];
+if (actions.length) {
+  const prioIcons  = { high: '🔴', medium: '🟡', low: '🟢' };
+  const isStructured = typeof actions[0] === 'object' && actions[0].priority;
+
+  vh += '<div class="card"><div class="card-title">📋 Findings & Actions</div>';
+
+  if (isStructured) {
+    // Group by priority
+    const groups = { high: [], medium: [], low: [] };
+    actions.forEach(a => { const p = a.priority || 'low'; if (!groups[p]) groups[p] = []; groups[p].push(a); });
+
+    let promptIdx = 0;
+    for (const prio of ['high', 'medium', 'low']) {
+      const items = groups[prio];
+      if (!items || !items.length) continue;
+      const label = prio.charAt(0).toUpperCase() + prio.slice(1) + ' Priority';
+      vh += `<div class="card-section"><div class="card-section-title">${prioIcons[prio]} ${label}</div>`;
+      items.forEach(item => {
+        const itemType = item.type || 'action';
+        const typeLabel = itemType === 'action' ? '⚡ Action' : '📝 Note';
+        const pid = 'prompt-' + (promptIdx++);
+        vh += `<div class="action-item-card">
+          <div class="action-item-header">
+            <span class="prio-badge prio-${prio}">${prio}</span>
+            <span class="type-badge">${typeLabel}</span>
+          </div>
+          <div class="action-item-text">${md(item.action || '')}</div>`;
+        if (item.ai_prompt) {
+          vh += `<div class="ai-prompt-block">
+            <button class="ai-prompt-toggle" onclick="document.getElementById('${pid}').classList.toggle('visible');this.textContent=this.textContent==='▶ Show AI Prompt'?'▼ Hide AI Prompt':'▶ Show AI Prompt'">▶ Show AI Prompt</button>
+            <div class="ai-prompt-content" id="${pid}">
+              <button class="copy-btn" onclick="navigator.clipboard.writeText(this.parentElement.querySelector('.prompt-text').textContent).then(()=>{this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)})">Copy</button>
+              <span class="prompt-text">${esc(item.ai_prompt)}</span>
+            </div>
+          </div>`;
+        }
+        vh += '</div>';
+      });
+      vh += '</div>';
+    }
+  } else {
+    // Legacy flat string array
+    vh += `<ol class="action-list">${actions.map((a, i) =>
+      `<li><span class="action-num">${i + 1}</span><span>${md(typeof a === 'string' ? a : a.action || '')}</span></li>`
+    ).join('')}</ol>`;
+  }
+  vh += '</div>';
+}
+
+// Consensus
+const consensus = SYNTHESIS.consensus || [];
+if (consensus.length) {
+  vh += '<div class="card"><div class="card-title" style="color:var(--green)">✓ Consensus</div>';
+  consensus.forEach(c => {
+    const point = typeof c === 'string' ? c : (c.point || '');
+    const agents = (typeof c === 'object' && c.agents) ? c.agents : [];
+    const strength = (typeof c === 'object' && c.strength) ? c.strength : '';
+    vh += `<div class="consensus-item">
+      <div class="item-point">${md(point)}</div>
+      <div class="item-meta">${agents.map(a => agentBadge(a)).join(' ')}${strength ? ` · <em>${md(strength)}</em>` : ''}</div>
+    </div>`;
+  });
+  vh += '</div>';
+}
+
+// Divergence
+const divergence = SYNTHESIS.divergence || [];
+if (divergence.length) {
+  vh += '<div class="card"><div class="card-title" style="color:var(--yellow)">⚡ Divergence</div>';
+  divergence.forEach(d => {
+    const point = typeof d === 'string' ? d : (d.point || '');
+    const positions = (typeof d === 'object' && d.positions) ? d.positions : {};
+    const resolution = (typeof d === 'object' && d.resolution) ? d.resolution : '';
+    vh += `<div class="divergence-item"><div class="item-point">${md(point)}</div>`;
+    for (const [agent, pos] of Object.entries(positions)) {
+      vh += `<div class="item-meta">${agentBadge(agent)} ${md(pos)}</div>`;
+    }
+    if (resolution) vh += `<div class="item-resolution">Resolution: ${md(resolution)}</div>`;
+    vh += '</div>';
+  });
+  vh += '</div>';
+}
+
+// Revisit triggers
+const triggers = SYNTHESIS.revisit_triggers || [];
+if (triggers.length) {
+  vh += '<div class="card"><div class="card-title">🔄 Revisit When</div>';
+  vh += listItems(triggers, 'triggers', '⚡');
+  vh += '</div>';
+}
+
+addPanel('verdict', vh, true);
+
+// ═══════════════════════════════════════════
+//  OPINION TABS (one per agent)
+// ═══════════════════════════════════════════
+for (const [name, op] of Object.entries(OPINIONS)) {
+  const a = AGENTS[name] || { icon: '🤖', label: name, color: 'purple' };
+  addTab(name, `${a.icon} ${a.label}`, false);
+
+  let oh = '';
+
+  // Recommendation
+  oh += `<div class="card">
+    <div class="card-title">${a.icon} ${esc(a.label)}</div>
+    <div class="card-section"><div class="card-section-title">Recommendation</div>
+      <div style="font-size:1.05rem;font-weight:500;line-height:1.6">${md(op.recommendation || 'N/A')}</div>
+    </div>`;
+
+  // Confidence
+  if (op.confidence !== undefined) {
+    oh += `<div class="card-section"><div class="card-section-title">Confidence</div>`;
+    oh += confBar(a.label, op.confidence);
+    oh += '</div>';
+  }
+
+  // Reasoning
+  if (op.reasoning && op.reasoning.length) {
+    oh += `<div class="card-section"><div class="card-section-title">Reasoning</div>`;
+    oh += listItems(op.reasoning, 'numbered', '');
+    oh += '</div>';
+  }
+
+  // Tradeoffs
+  const pros = op.tradeoffs?.pros || [];
+  const cons = op.tradeoffs?.cons || [];
+  if (pros.length || cons.length) {
+    oh += `<div class="card-section"><div class="card-section-title">Tradeoffs</div>
+    <div class="tradeoffs-grid">`;
+    if (pros.length) {
+      oh += `<div class="tradeoffs-col pros-col"><div class="tradeoffs-col-title">Pros</div>`;
+      oh += listItems(pros, 'pros', '+');
+      oh += '</div>';
+    }
+    if (cons.length) {
+      oh += `<div class="tradeoffs-col cons-col"><div class="tradeoffs-col-title">Cons</div>`;
+      oh += listItems(cons, 'cons', '−');
+      oh += '</div>';
+    }
+    oh += '</div></div>';
+  }
+
+  // Assumptions
+  if (op.assumptions && op.assumptions.length) {
+    oh += `<div class="card-section"><div class="card-section-title">Assumptions</div>`;
+    oh += listItems(op.assumptions, '', '•');
+    oh += '</div>';
+  }
+
+  // Codebase evidence
+  if (op.codebase_evidence && op.codebase_evidence.length) {
+    oh += `<div class="card-section"><div class="card-section-title">Codebase Evidence</div>`;
+    oh += listItems(op.codebase_evidence, 'evidence', '→');
+    oh += '</div>';
+  }
+
+  // Belief triggers
+  if (op.belief_triggers && op.belief_triggers.length) {
+    oh += `<div class="card-section"><div class="card-section-title">Belief Triggers</div>`;
+    oh += listItems(op.belief_triggers, 'triggers', '⚡');
+    oh += '</div>';
+  }
+
+  oh += '</div>';
+  addPanel(name, oh, false);
+}
+
+// ═══════════════════════════════════════════
+//  REVIEWS TAB (if present)
+// ═══════════════════════════════════════════
+if (Object.keys(REVIEWS).length > 0) {
+  addTab('reviews', '📊 Peer Reviews', false);
+  let rh = '';
+
+  for (const [reviewer, review] of Object.entries(REVIEWS)) {
+    const a = AGENTS[reviewer] || { icon: '🤖', label: reviewer };
+    rh += `<div class="card"><div class="card-title">${a.icon} ${esc(a.label)}'s Review</div>`;
+
+    if (review.reviews && review.reviews.length) {
+      review.reviews.forEach(r => {
+        rh += `<div class="review-agent-block">
+          <div class="review-agent-name">${esc(r.agent)}</div>`;
+        if (r.scores) {
+          rh += `<div class="scores-row">
+            <div class="score-item"><span class="score-label">Correctness</span> <span class="score-val">${r.scores.correctness}/5</span></div>
+            <div class="score-item"><span class="score-label">Completeness</span> <span class="score-val">${r.scores.completeness}/5</span></div>
+            <div class="score-item"><span class="score-label">Feasibility</span> <span class="score-val">${r.scores.feasibility}/5</span></div>
+          </div>`;
+        }
+        if (r.strengths && r.strengths.length) {
+          rh += `<div style="font-size:0.85rem"><span style="color:var(--green)">Strengths:</span> ${r.strengths.map(md).join(', ')}</div>`;
+        }
+        if (r.weaknesses && r.weaknesses.length) {
+          rh += `<div style="font-size:0.85rem;margin-top:4px"><span style="color:var(--yellow)">Weaknesses:</span> ${r.weaknesses.map(md).join(', ')}</div>`;
+        }
+        rh += '</div>';
+      });
+    }
+
+    if (review.consensus_points && review.consensus_points.length) {
+      rh += `<div class="card-section"><div class="card-section-title">Consensus Points</div>`;
+      rh += listItems(review.consensus_points, '', '✓');
+      rh += '</div>';
+    }
+    if (review.blind_spots && review.blind_spots.length) {
+      rh += `<div class="card-section"><div class="card-section-title">Blind Spots</div>`;
+      rh += listItems(review.blind_spots, 'triggers', '👁');
+      rh += '</div>';
+    }
+    if (review.ranking && review.ranking.length) {
+      rh += `<div class="card-section"><div class="card-section-title">Ranking</div>`;
+      rh += `<div style="font-size:0.9rem">${review.ranking.map((r, i) => `<strong>${i+1}.</strong> ${md(r)}`).join(' → ')}</div>`;
+      rh += '</div>';
+    }
+
+    rh += '</div>';
+  }
+
+  addPanel('reviews', rh, false);
+}
+
+// ── Theme ──
+function toggleTheme() {
+  const current = document.documentElement.getAttribute('data-theme');
+  document.documentElement.setAttribute('data-theme', current === 'light' ? '' : 'light');
+}
+if (window.matchMedia('(prefers-color-scheme: light)').matches) {
+  document.documentElement.setAttribute('data-theme', 'light');
+}
+</script>
+</body>
+</html>
