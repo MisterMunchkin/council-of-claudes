@@ -42,6 +42,7 @@ PURPLE='\033[0;35m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 BOLD='\033[1m'
+DIM='\033[2m'
 
 # Persona config: parallel arrays (bash 3.2 compatible — no associative arrays)
 PERSONA_NAMES=("architect" "pragmatist" "security-perf")
@@ -1041,6 +1042,7 @@ usage() {
 ${BOLD}Claude Council${NC} — Multi-session deliberation engine
 
 ${BOLD}USAGE:${NC}
+    council                                   Interactive mode — prep your question with the chairman
     council "your question here"              Standard deliberation (streams by default)
     council --with-review "question"          Include peer review stage
     council --quick "question"                Skip optional stages
@@ -1072,7 +1074,13 @@ ${BOLD}GITNEXUS INTEGRATION:${NC}
     First run indexes the repo automatically. Subsequent runs use cached index.
     Agents get access to knowledge graph queries, impact analysis, and symbol context.
 
+${BOLD}INTERACTIVE MODE:${NC}
+    Run 'council' with no question to enter interactive prep mode.
+    The chairman helps you refine your question before deliberation.
+    Commands:  /run (launch council)  /question (show current)  /edit (revise)  /quit
+
 ${BOLD}EXAMPLES:${NC}
+    council                                   Start interactive prep session
     council "Should we migrate from Zustand to Jotai?"
     council --with-review "How should we structure the auth module?"
     council --with-nexus "What's the blast radius of refactoring the auth middleware?"
@@ -1142,8 +1150,61 @@ main() {
     done
 
     if [ -z "$QUESTION" ]; then
-        usage
-        exit 1
+        # Interactive mode — launch session prep with the chairman
+        if [ -t 0 ]; then
+            local question_file flags_file
+            question_file=$(mktemp "${TMPDIR:-/tmp}/council_question.XXXXXX")
+            flags_file=$(mktemp "${TMPDIR:-/tmp}/council_flags.XXXXXX")
+            export COUNCIL_QUESTION_FILE="$question_file"
+            export COUNCIL_FLAGS_FILE="$flags_file"
+
+            # Build session_prep args
+            local prep_args=("--model" "$MODEL_CHAIRMAN")
+            if [ -n "$ALLOWED_TOOLS" ]; then
+                prep_args+=("--allowed-tools" "$ALLOWED_TOOLS")
+            fi
+            if [ "$USE_NEXUS" = true ] && [ -n "$NEXUS_MCP_CONFIG" ]; then
+                prep_args+=("--mcp-config" "$NEXUS_MCP_CONFIG")
+            fi
+
+            python3 "${SCRIPT_DIR}/session_prep.py" "${prep_args[@]}"
+
+            # Read the refined question
+            if [ -f "$question_file" ] && [ -s "$question_file" ]; then
+                QUESTION="$(cat "$question_file")"
+                rm -f "$question_file"
+            else
+                rm -f "$question_file"
+                rm -f "$flags_file"
+                echo -e "${DIM}  No question provided. Exiting.${NC}"
+                exit 0
+            fi
+
+            # Apply flags toggled during the prep session
+            if [ -f "$flags_file" ] && [ -s "$flags_file" ]; then
+                local prep_flags
+                prep_flags="$(cat "$flags_file")"
+                rm -f "$flags_file"
+
+                if echo "$prep_flags" | jq -e '.review == true' &>/dev/null; then
+                    MODE="with-review"
+                fi
+                if echo "$prep_flags" | jq -e '.quick == true' &>/dev/null; then
+                    MODE="quick"
+                fi
+                if echo "$prep_flags" | jq -e '.nexus == true' &>/dev/null; then
+                    USE_NEXUS=true
+                fi
+                if echo "$prep_flags" | jq -e '.no_stream == true' &>/dev/null; then
+                    STREAM=false
+                fi
+            else
+                rm -f "$flags_file"
+            fi
+        else
+            usage
+            exit 1
+        fi
     fi
 
     log "${BOLD}Claude Council${NC} — Deliberation starting"

@@ -51,6 +51,25 @@ if ! command -v jq &>/dev/null; then
 fi
 ok "jq found: $(which jq)"
 
+# Check Python + install Textual
+if ! command -v python3 &>/dev/null; then
+    error "Python 3 not found. Please install Python 3.9+."
+    exit 1
+fi
+ok "Python 3 found: $(python3 --version)"
+
+log "Installing Textual TUI library..."
+if python3 -c "import textual" &>/dev/null; then
+    ok "Textual already installed"
+else
+    if pip3 install textual 2>/dev/null || pip3 install textual --break-system-packages 2>/dev/null; then
+        ok "Textual installed successfully"
+    else
+        warn "Could not install Textual automatically."
+        warn "Please run: pip3 install textual"
+    fi
+fi
+
 # Create directories
 log "Creating directories..."
 mkdir -p "${CLAUDE_SKILLS_DIR}/council"
@@ -128,6 +147,7 @@ echo "  From Claude Code interactive mode:"
 echo "    /council \"Should we use Zustand or Jotai?\""
 echo ""
 echo "  From terminal:"
+echo "    council                                          Interactive prep mode"
 echo "    council \"Should we use Zustand or Jotai?\""
 echo "    council --with-review \"How should we structure auth?\""
 echo "    council-list"
