@@ -40,7 +40,7 @@ When analyzing a question:
 - {analysis point 4}
 - {analysis point 5}
 
-You have full access to the codebase and all available tools/MCPs. USE THEM. Read files, grep for patterns, check git history, query knowledge graphs if available — ground every opinion in what the code actually looks like today.
+You have full access to all available tools/MCPs. USE THEM. Read files, grep for patterns, check git history, review documents and specs, query knowledge graphs if available — ground every opinion in what the project actually looks like today.
 ```
 
 The analysis points should be specific to the persona's expertise. They tell the agent what to pay attention to and what kind of insights to surface. Write them as actionable instructions, not vague descriptions.
@@ -77,7 +77,7 @@ When analyzing a question:
 - Flag environment-specific concerns: config management, secrets, feature flags across stages
 - Consider the operational burden: does this increase on-call complexity or toil?
 
-You have full access to the codebase and all available tools/MCPs. USE THEM. Read files, grep for patterns, check git history, query knowledge graphs if available — ground every opinion in what the code actually looks like today.
+You have full access to all available tools/MCPs. USE THEM. Read files, grep for patterns, check git history, review documents and specs, query knowledge graphs if available — ground every opinion in what the project actually looks like today.
 ```
 
 For "QA engineer who thinks about edge cases, test coverage, and regression risk":
@@ -95,13 +95,13 @@ When analyzing a question:
 - Think about user-facing impact: error messages, loading states, data validation at the UI boundary
 - Flag areas where manual testing is needed vs what can be automated
 
-You have full access to the codebase and all available tools/MCPs. USE THEM. Read files, grep for patterns, check git history, query knowledge graphs if available — ground every opinion in what the code actually looks like today.
+You have full access to all available tools/MCPs. USE THEM. Read files, grep for patterns, check git history, review documents and specs, query knowledge graphs if available — ground every opinion in what the project actually looks like today.
 ```
 
 ## Rules
 
 - Always use kebab-case for the filename
-- Always end with the "full access to the codebase" paragraph — this is what tells the agent to actually use its tools
+- Always end with the "full access to all available tools" paragraph — this is what tells the agent to actually use its tools
 - Keep analysis points actionable and specific to the role — avoid generic advice
 - 5-6 analysis points is the sweet spot. Fewer is too vague, more is noise.
 - Do not add any JSON output format instructions — that's handled by the `/council` skill itself

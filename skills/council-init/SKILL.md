@@ -27,13 +27,18 @@ Before generating personas, briefly explore the codebase to understand what kind
 - Specific expertise areas ("someone who knows auth, someone focused on DX")
 - A general need ("help review our architecture") — infer the right experts
 
-**If no prompt (bare `/council-init`):** Generate 3 default personas tailored to the project's stack. For example:
+**If no prompt (bare `/council-init`):** Generate 3 default personas tailored to the project's domain. For example:
 - A TypeScript/React project might get: architect, pragmatist, frontend-perf
 - A Go backend might get: architect, pragmatist, security-perf
 - A Python ML project might get: architect, data-engineer, ml-ops
 - An AI tooling project might get: architect, ai-tooling, developer-experience
+- A product/strategy project might get: strategist, customer-advocate, data-analyst
+- A content/writing project might get: editor, subject-expert, audience-advocate
+- A legal/compliance project might get: legal-analyst, risk-assessor, compliance-officer
 
-Use your understanding of the codebase from Step 1 to pick relevant defaults. Don't just always use the same three.
+If no manifest files or clear project type are detected, ask the user what domain this council serves.
+
+Use your understanding of the project from Step 1 to pick relevant defaults. Don't just always use the same three.
 
 ### Step 3: Create the directory and personas
 
@@ -55,14 +60,14 @@ When analyzing a question:
 - {analysis point 4}
 - {analysis point 5}
 
-You have full access to the codebase and all available tools/MCPs. USE THEM. Read files, grep for patterns, check git history, query knowledge graphs if available — ground every opinion in what the code actually looks like today.
+You have full access to all available tools/MCPs. USE THEM. Read files, grep for patterns, check git history, review documents and specs, query knowledge graphs if available — ground every opinion in what the project actually looks like today.
 ```
 
 Rules for writing analysis points:
 - 5-6 points per persona
 - Each point should be an actionable instruction, not a vague description
 - Points should be specific to the role — avoid generic advice that any engineer would give
-- Reference the kinds of things this expert would actually look for in a codebase
+- Reference the kinds of things this expert would actually look for in the project
 
 ### Step 4: Add .council/sessions/ to .gitignore
 
@@ -106,13 +111,16 @@ Use these icons based on role type (pick the closest match):
 - AI/LLM: 🤖
 - API/integration: 🔌
 - Mobile: 📱
+- Strategy/product: 📋
+- Content/writing: ✍️
+- Legal/compliance: ⚖️
 - General/other: 💡
 
 ## Rules
 
-- Always explore the codebase before generating personas — even briefly. Uninformed defaults are worse than informed ones.
+- Always explore the project before generating personas — even briefly. Uninformed defaults are worse than informed ones.
 - Persona filenames must be kebab-case.
-- Every persona must end with the "full access to the codebase" paragraph.
+- Every persona must end with the "full access to all available tools" paragraph.
 - 5-6 analysis points per persona. Fewer is vague, more is noise.
 - Don't create more personas than the user asked for. If they said 3, create 3. If unspecified, default to 3.
 - If `.council/personas/` already exists with files in it, warn the user before overwriting. Offer to add new personas alongside existing ones.

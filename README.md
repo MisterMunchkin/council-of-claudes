@@ -1,6 +1,6 @@
 # Claude Council
 
-A multi-agent deliberation engine for Claude Code. Convene a panel of expert agents to analyze engineering questions through structured discussion, peer review, and synthesis — with full access to your codebase, tools, and MCP servers.
+A multi-agent deliberation engine for Claude Code. Convene a panel of expert agents to analyze questions through structured discussion, peer review, and synthesis — with full access to your project artifacts, tools, and MCP servers.
 
 ## Quick Start
 
@@ -14,6 +14,8 @@ bash setup.sh
 cd /path/to/your/project
 # Then in Claude Code:
 /council-init "I need 3 members who can review our API architecture"
+# Or for non-code projects:
+/council-init "I need 3 members for product strategy decisions"
 
 # Run a deliberation
 /council "Should we migrate from REST to GraphQL for the mobile API?"
@@ -27,7 +29,7 @@ Claude Council runs as a set of Claude Code skills. The orchestration is prompt-
 /council "question"
     │
     ├── Stage 1: Parallel Agent calls (one per persona, model: sonnet)
-    │   Each agent investigates the codebase independently
+    │   Each agent investigates available artifacts independently
     │
     ├── Stage 2: Peer Review (optional, --with-review)
     │   Each agent anonymously scores the others

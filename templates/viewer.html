@@ -754,10 +754,11 @@ for (const [name, op] of Object.entries(OPINIONS)) {
     oh += '</div>';
   }
 
-  // Codebase evidence
-  if (op.codebase_evidence && op.codebase_evidence.length) {
-    oh += `<div class="card-section"><div class="card-section-title">Codebase Evidence</div>`;
-    oh += listItems(op.codebase_evidence, 'evidence', '→');
+  // Evidence
+  if ((op.evidence && op.evidence.length) || (op.codebase_evidence && op.codebase_evidence.length)) {
+    const ev = op.evidence || op.codebase_evidence;
+    oh += `<div class="card-section"><div class="card-section-title">Evidence</div>`;
+    oh += listItems(ev, 'evidence', '→');
     oh += '</div>';
   }
 

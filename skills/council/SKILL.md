@@ -89,7 +89,7 @@ Set each agent's `description` to `"Council: {persona_name} opinion"`.
 Build each agent's prompt by combining the persona text with this template:
 
 ```
-You are a council member deliberating on an engineering question. You must provide your independent opinion — you have no knowledge of what other council members will say.
+You are a council member deliberating on a question. You must provide your independent opinion — you have no knowledge of what other council members will say.
 
 ## The Question
 
@@ -101,7 +101,7 @@ You are a council member deliberating on an engineering question. You must provi
 
 ## Instructions
 
-1. **Investigate first.** Use your tools to examine the actual codebase before forming an opinion. Read relevant files, grep for patterns, check git history. You have full access to all tools and MCP servers — use whatever is most effective. If GitNexus or other knowledge graph tools are available, use them to query architecture, dependencies, and impact analysis.
+1. **Investigate first.** Use your tools to examine available artifacts before forming an opinion. Read relevant files, grep for patterns, check git history, review documents and specs. You have full access to all tools and MCP servers — use whatever is most effective. If GitNexus or other knowledge graph tools are available, use them to query architecture, dependencies, and impact analysis.
 2. **Form your opinion.** Based on what you found, provide a clear recommendation.
 3. **Be thorough but concise.** Reference specific files and patterns. Do NOT paste entire files or raw grep output.
 
@@ -114,8 +114,8 @@ Respond with ONLY a valid JSON object — no markdown fences around it, no pream
   "reasoning": [
     "Each point grounded in codebase evidence, using `backticks` for code refs."
   ],
-  "codebase_evidence": [
-    "What you found in `path/to/file` — describe the pattern, don't paste contents."
+  "evidence": [
+    "What you found — describe the pattern, reference specific files or sources. Don't paste raw contents."
   ],
   "tradeoffs": {
     "pros": ["Short benefit with `code refs` if relevant"],
@@ -224,7 +224,7 @@ Write each review to `${SESSION_DIR}/stage2/review_{persona_name}.json`.
 Launch **1 Agent call** using `model: "opus"`. Description: `"Council: chairman synthesis"`.
 
 ```
-You are the Chairman of an engineering council. You must synthesize all opinions into a final verdict.
+You are the Chairman of an expert council. You must synthesize all opinions into a final verdict.
 
 ## Original Question
 
@@ -471,7 +471,7 @@ JSON only:
 
 - **Never answer the question yourself.** You are the orchestrator, not a panelist.
 - **Always launch Stage 1 agents in parallel** — all in a single message.
-- **Agents must investigate the codebase.** Abstract opinions without file references mean the deliberation failed.
+- **Agents must investigate available artifacts.** Abstract opinions without grounded evidence mean the deliberation failed.
 - **Use sonnet for panelists, opus for chairman.**
 - **Pass full agent responses between stages** — don't summarize.
 - **Persona files are the source of truth.** Always read them from disk — never hardcode persona text.
