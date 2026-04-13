@@ -1,160 +1,192 @@
 #!/usr/bin/env bash
 # ============================================================================
-# Claude Council — Setup Script
-# Installs the council skill into your Claude Code environment
+# Claude Council — Setup
+# Installs the /council, /council-init, and /council-persona skills
 # ============================================================================
 
 set -euo pipefail
 
-RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
+RED='\033[0;31m'
 BOLD='\033[1m'
+DIM='\033[2m'
 NC='\033[0m'
 
-log()   { echo -e "${CYAN}[setup]${NC} $*"; }
-ok()    { echo -e "${GREEN}[setup]${NC} $*"; }
-warn()  { echo -e "${YELLOW}[setup]${NC} $*"; }
-error() { echo -e "${RED}[setup]${NC} $*" >&2; }
+log()   { echo -e "${CYAN}[council]${NC} $*"; }
+ok()    { echo -e "${GREEN}[council]${NC} $*"; }
+warn()  { echo -e "${YELLOW}[council]${NC} $*"; }
+error() { echo -e "${RED}[council]${NC} $*" >&2; }
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CLAUDE_SKILLS_DIR="${HOME}/.claude/skills"
-COUNCIL_HOME="${HOME}/.council"
+SKILLS_BASE="${HOME}/.claude/skills"
+SKILL_DIR="${SKILLS_BASE}/council"
+INIT_SKILL_DIR="${SKILLS_BASE}/council-init"
+PERSONA_SKILL_DIR="${SKILLS_BASE}/council-persona"
+LIST_SKILL_DIR="${SKILLS_BASE}/council-list-sessions"
 
-echo ""
-echo -e "${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo -e "${BOLD}       Claude Council — Setup${NC}"
-echo -e "${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo ""
+usage() {
+    echo ""
+    echo -e "${BOLD}Claude Council — Setup${NC}"
+    echo ""
+    echo "Usage:"
+    echo "  ./setup.sh              Install/update the council skills"
+    echo "  ./setup.sh --uninstall  Remove the council skills"
+    echo "  ./setup.sh --status     Check installation status"
+    echo ""
+}
 
-# Check prerequisites
-log "Checking prerequisites..."
+# ---------------------------------------------------------------------------
+# Status
+# ---------------------------------------------------------------------------
+cmd_status() {
+    echo ""
+    echo -e "${BOLD}Claude Council — Status${NC}"
+    echo ""
 
-if ! command -v claude &>/dev/null; then
-    error "Claude Code CLI not found."
-    error "Install it: npm install -g @anthropic-ai/claude-code"
-    exit 1
-fi
-ok "Claude Code CLI found: $(which claude)"
+    # Global skills
+    echo -e "${BOLD}  Global Skills${NC}"
+    for skill in council council-init council-persona council-list-sessions; do
+        if [ -f "${SKILLS_BASE}/${skill}/SKILL.md" ]; then
+            ok "  /${skill} installed"
+        else
+            warn "  /${skill} not installed"
+        fi
+    done
 
-if ! command -v jq &>/dev/null; then
-    warn "jq not found. Installing..."
-    if command -v brew &>/dev/null; then
-        brew install jq
-    elif command -v apt &>/dev/null; then
-        sudo apt install -y jq
+    if [ -f "${SKILL_DIR}/templates/viewer.html" ]; then
+        ok "  HTML viewer template installed"
     else
-        error "Please install jq manually: https://jqlang.github.io/jq/download/"
+        warn "  HTML viewer template missing"
+    fi
+
+    # Project-local council
+    echo ""
+    echo -e "${BOLD}  Current Project${NC}"
+    if [ -d ".council/personas" ]; then
+        local persona_count
+        persona_count=$(ls .council/personas/*.md 2>/dev/null | wc -l | tr -d ' ')
+        ok "  Initialized — ${persona_count} personas"
+        for f in .council/personas/*.md; do
+            [ -f "$f" ] || continue
+            local name desc
+            name="$(basename "$f" .md)"
+            desc="$(head -1 "$f" | sed 's/^#*\s*//' | sed 's/\*//g' | cut -c1-60)"
+            echo -e "    ${DIM}•${NC} ${name} — ${DIM}${desc}${NC}"
+        done
+    else
+        warn "  Not initialized — run /council-init in Claude Code"
+    fi
+
+    local session_count=0
+    if [ -d ".council/sessions" ]; then
+        session_count=$(find .council/sessions -name "meta.json" 2>/dev/null | wc -l | tr -d ' ')
+    fi
+    log "  Sessions: ${session_count} in .council/sessions/"
+
+    echo ""
+}
+
+# ---------------------------------------------------------------------------
+# Uninstall
+# ---------------------------------------------------------------------------
+cmd_uninstall() {
+    echo ""
+    log "Removing Claude Council skills..."
+
+    for skill in council council-init council-persona council-list-sessions; do
+        if [ -d "${SKILLS_BASE}/${skill}" ]; then
+            rm -rf "${SKILLS_BASE}/${skill}"
+            ok "Removed /${skill}"
+        fi
+    done
+
+    echo ""
+    log "${DIM}Project data in .council/ was NOT removed.${NC}"
+    log "${DIM}Delete it manually if you want: rm -rf .council/${NC}"
+    echo ""
+}
+
+# ---------------------------------------------------------------------------
+# Install
+# ---------------------------------------------------------------------------
+cmd_install() {
+    echo ""
+    echo -e "${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${BOLD}       Claude Council — Setup${NC}"
+    echo -e "${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
+
+    # Prerequisites
+    log "Checking prerequisites..."
+
+    if ! command -v claude &>/dev/null; then
+        error "Claude Code CLI not found."
+        error "Install it: npm install -g @anthropic-ai/claude-code"
         exit 1
     fi
-fi
-ok "jq found: $(which jq)"
+    ok "Claude Code CLI found"
 
-# Check Python + install Textual
-if ! command -v python3 &>/dev/null; then
-    error "Python 3 not found. Please install Python 3.9+."
-    exit 1
-fi
-ok "Python 3 found: $(python3 --version)"
-
-log "Installing Textual TUI library..."
-if python3 -c "import textual" &>/dev/null; then
-    ok "Textual already installed"
-else
-    if pip3 install textual 2>/dev/null || pip3 install textual --break-system-packages 2>/dev/null; then
-        ok "Textual installed successfully"
-    else
-        warn "Could not install Textual automatically."
-        warn "Please run: pip3 install textual"
+    if ! command -v python3 &>/dev/null; then
+        error "Python 3 not found (needed for HTML viewer generation)."
+        exit 1
     fi
-fi
+    ok "Python 3 found"
 
-# Create directories
-log "Creating directories..."
-mkdir -p "${CLAUDE_SKILLS_DIR}/council"
-mkdir -p "${COUNCIL_HOME}"
+    # Install skills
+    log "Installing skills..."
 
-# Copy skill files
-log "Installing skill files..."
-cp -r "${SCRIPT_DIR}/skills/council/SKILL.md" "${CLAUDE_SKILLS_DIR}/council/"
-cp -r "${SCRIPT_DIR}/src" "${CLAUDE_SKILLS_DIR}/council/"
-cp -r "${SCRIPT_DIR}/personas" "${CLAUDE_SKILLS_DIR}/council/"
-cp -r "${SCRIPT_DIR}/prompts" "${CLAUDE_SKILLS_DIR}/council/"
-cp -r "${SCRIPT_DIR}/templates" "${CLAUDE_SKILLS_DIR}/council/"
+    mkdir -p "${SKILL_DIR}/templates"
+    cp "${SCRIPT_DIR}/skills/council/SKILL.md" "${SKILL_DIR}/SKILL.md"
+    ok "/council installed"
 
-# Make scripts executable
-chmod +x "${CLAUDE_SKILLS_DIR}/council/src/council.sh"
+    mkdir -p "${INIT_SKILL_DIR}"
+    cp "${SCRIPT_DIR}/skills/council-init/SKILL.md" "${INIT_SKILL_DIR}/SKILL.md"
+    ok "/council-init installed"
 
-# Create convenience symlinks
-log "Creating convenience commands..."
-SHELL_RC=""
-if [ -f "${HOME}/.zshrc" ]; then
-    SHELL_RC="${HOME}/.zshrc"
-elif [ -f "${HOME}/.bashrc" ]; then
-    SHELL_RC="${HOME}/.bashrc"
-fi
+    mkdir -p "${PERSONA_SKILL_DIR}"
+    cp "${SCRIPT_DIR}/skills/council-persona/SKILL.md" "${PERSONA_SKILL_DIR}/SKILL.md"
+    ok "/council-persona installed"
 
-COUNCIL_BIN="${CLAUDE_SKILLS_DIR}/council/src/council.sh"
+    mkdir -p "${LIST_SKILL_DIR}"
+    cp "${SCRIPT_DIR}/skills/council-list-sessions/SKILL.md" "${LIST_SKILL_DIR}/SKILL.md"
+    ok "/council-list-sessions installed"
 
-# Check if aliases already exist
-if [ -n "$SHELL_RC" ]; then
-    if ! grep -q "alias council=" "$SHELL_RC" 2>/dev/null; then
-        cat >> "$SHELL_RC" <<RCEOF
+    # HTML viewer template
+    cp "${SCRIPT_DIR}/templates/viewer.html" "${SKILL_DIR}/templates/viewer.html"
+    ok "HTML viewer template installed"
 
-# Claude Council aliases
-alias council='bash ${COUNCIL_BIN}'
-alias council-list='bash ${COUNCIL_BIN} list'
-alias council-outcome='bash ${COUNCIL_BIN} outcome'
-alias council-revisit='bash ${COUNCIL_BIN} revisit'
-alias council-nudge='bash ${COUNCIL_BIN} nudge'
-RCEOF
-        ok "Shell aliases added to ${SHELL_RC}"
-        warn "Run: source ${SHELL_RC}  (or open a new terminal)"
-    else
-        ok "Shell aliases already configured"
-    fi
-fi
-
-# Create default config
-if [ ! -f "${COUNCIL_HOME}/config.json" ]; then
-    cat > "${COUNCIL_HOME}/config.json" <<CFGEOF
-{
-    "timeout_ms": {
-        "default": 120000
-    },
-    "quorum_grace_ms": 30000,
-    "proactive": true,
-    "personas": {
-        "architect": "architect.md",
-        "pragmatist": "pragmatist.md",
-        "security-perf": "security-perf.md"
-    },
-    "allowed_tools": "Read,Grep,Glob,Bash(git log *),Bash(git diff *),Bash(git blame *),Bash(git status *),Bash(ls *),Bash(cat *),Bash(find *),Bash(wc *)"
+    # Summary
+    echo ""
+    echo -e "${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${GREEN}${BOLD}  Council installed${NC}"
+    echo -e "${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
+    echo -e "  ${BOLD}Skills:${NC}"
+    echo -e "    /council          Deliberate on engineering questions"
+    echo -e "    /council-init     Bootstrap personas for a project"
+    echo -e "    /council-persona  Add a single persona"
+    echo -e "    /council-list-sessions  Browse past deliberations"
+    echo ""
+    echo -e "  ${BOLD}Viewer:${NC}  ${SKILL_DIR}/templates/viewer.html"
+    echo ""
+    echo -e "  ${BOLD}Get started in a project:${NC}"
+    echo ""
+    echo -e "    /council-init \"I need 3 members who can review our API design\""
+    echo -e "    /council \"Should we use REST or GraphQL for the new endpoints?\""
+    echo ""
+    echo -e "  ${DIM}Personas are stored per-project in .council/personas/${NC}"
+    echo -e "  ${DIM}Sessions are stored per-project in .council/sessions/ (gitignored)${NC}"
+    echo ""
 }
-CFGEOF
-    ok "Default config created: ${COUNCIL_HOME}/config.json"
-fi
 
-echo ""
-echo -e "${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo -e "${GREEN}${BOLD}  ✓ Claude Council installed successfully!${NC}"
-echo -e "${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo ""
-echo "Usage:"
-echo ""
-echo "  From Claude Code interactive mode:"
-echo "    /council \"Should we use Zustand or Jotai?\""
-echo ""
-echo "  From terminal:"
-echo "    council                                          Interactive prep mode"
-echo "    council \"Should we use Zustand or Jotai?\""
-echo "    council --with-review \"How should we structure auth?\""
-echo "    council-list"
-echo "    council-nudge SESSION_ID --agent architect --correction \"Can't use Redis\""
-echo ""
-echo "  Personas:    ${CLAUDE_SKILLS_DIR}/council/personas/"
-echo "  Prompts:     ${CLAUDE_SKILLS_DIR}/council/prompts/"
-echo "  Sessions:    ${COUNCIL_HOME}/"
-echo "  Config:      ${COUNCIL_HOME}/config.json"
-echo ""
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+case "${1:-}" in
+    --help|-h)     usage ;;
+    --status)      cmd_status ;;
+    --uninstall)   cmd_uninstall ;;
+    *)             cmd_install ;;
+esac

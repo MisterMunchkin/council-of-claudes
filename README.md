@@ -1,122 +1,124 @@
 # Claude Council
 
-A multi-session deliberation engine for Claude Code. Adapted from [cliagent-council](https://github.com/yogirk/agent-council), but using **Claude Code sessions exclusively** instead of multiple CLI agents.
-
-## Why Claude Council?
-
-cliagent-council requires 3 different CLI agents (Claude Code + Codex + Gemini). Claude Council gives you the same deliberation framework — structured stages, peer review, synthesis, nudges — but runs entirely on Claude Code sessions with **expert persona diversity** instead of model diversity.
-
-Each session gets a different expert lens (Architect, Pragmatist, Security & Performance Engineer) with full codebase access, so opinions are grounded in your actual code.
+A multi-agent deliberation engine for Claude Code. Convene a panel of expert agents to analyze engineering questions through structured discussion, peer review, and synthesis — with full access to your codebase, tools, and MCP servers.
 
 ## Quick Start
 
 ```bash
-# Clone and install
+# Install the skills (one-time)
 git clone <this-repo>
 cd claude-council
 bash setup.sh
 
-# Run your first deliberation
-council "Should we migrate from REST to GraphQL for the mobile API?"
+# Initialize a council in your project
+cd /path/to/your/project
+# Then in Claude Code:
+/council-init "I need 3 members who can review our API architecture"
+
+# Run a deliberation
+/council "Should we migrate from REST to GraphQL for the mobile API?"
 ```
 
 ## Architecture
 
+Claude Council runs as a set of Claude Code skills. The orchestration is prompt-driven — no bash scripts, no Python runtime, no subprocess management. Claude Code's native Agent tool handles parallelism, streaming, and tool access.
+
 ```
-┌─────────────────────────────────────────────────────┐
-│                   ORCHESTRATOR                       │
-│                  (council.sh)                        │
-├─────────────────────────────────────────────────────┤
-│                                                      │
-│  Stage 1: Independent Opinions (parallel)            │
-│  ┌──────────┐  ┌──────────┐  ┌──────────────────┐  │
-│  │ Architect │  │Pragmatist│  │Security & Perf   │  │
-│  │ claude -p │  │claude -p │  │claude -p         │  │
-│  │ (codebase │  │(codebase │  │(codebase access) │  │
-│  │  access)  │  │ access)  │  │                  │  │
-│  └─────┬─────┘  └─────┬────┘  └────────┬────────┘  │
-│        │              │                 │            │
-│        └──────────────┼─────────────────┘            │
-│                       ▼                              │
-│  Stage 2: Peer Review (optional, parallel)           │
-│  Each agent scores the others anonymously            │
-│                       │                              │
-│                       ▼                              │
-│  Stage 3: Chairman Synthesis                         │
-│  ┌─────────────────────────────────────────────┐    │
-│  │ Chairman (claude -p) reads all opinions,     │    │
-│  │ identifies consensus/divergence, renders     │    │
-│  │ final verdict with confidence scores         │    │
-│  └─────────────────────────────────────────────┘    │
-│                       │                              │
-│                       ▼                              │
-│  Stage 4: Nudge (post-hoc, on demand)               │
-│  Challenge specific agent's assumptions              │
-│                                                      │
-├─────────────────────────────────────────────────────┤
-│  Output: ~/.council/{project}/{session}/             │
-│  - opinion_*.json, review_*.json, synthesis.json    │
-│  - viewer.html (self-contained, dark/light mode)    │
-└─────────────────────────────────────────────────────┘
+/council "question"
+    │
+    ├── Stage 1: Parallel Agent calls (one per persona, model: sonnet)
+    │   Each agent investigates the codebase independently
+    │
+    ├── Stage 2: Peer Review (optional, --with-review)
+    │   Each agent anonymously scores the others
+    │
+    └── Stage 3: Chairman Synthesis (model: opus)
+        Reads all opinions, renders verdict with action items
+        │
+        └── Output: .council/sessions/{id}/
+            ├── meta.json, opinion_*.json, synthesis.json
+            └── viewer.html (self-contained, dark/light mode)
 ```
 
-## Commands
+Every spawned agent has full access to all tools and MCP servers available in the session — Grep, Read, Bash, GitNexus, Figma, Sentry, Jira, whatever you have configured.
 
-| Command | Description |
-|---------|-------------|
-| `council "question"` | Standard deliberation (Stages 1 + 3) |
-| `council --with-review "question"` | Include peer review (Stages 1 + 2 + 3) |
-| `council --quick "question"` | Fast mode, skip optional stages |
-| `council-list` | Browse past sessions |
-| `council-revisit <id>` | Re-run with current codebase |
-| `council-nudge <id> --agent <name> --correction "text"` | Challenge assumptions |
-| `council-outcome <id> "result"` | Record what happened |
+## Skills
 
-## Customization
+| Skill | Description |
+|-------|-------------|
+| `/council "question"` | Run a deliberation (standard: Stage 1 + 3) |
+| `/council --with-review "question"` | Include peer review (Stage 1 + 2 + 3) |
+| `/council --quick "question"` | Opinions only, skip synthesis |
+| `/council --personas a,b "question"` | Use specific personas |
+| `/council --revisit SESSION_ID` | Reload and discuss a past session |
+| `/council-init` | Bootstrap personas for the current project |
+| `/council-init "description"` | Generate tailored personas from a description |
+| `/council-persona "description"` | Add a single persona |
+| `/council-list-sessions` | Browse past deliberations |
 
-### Add a persona
+## Personas
 
-Create `personas/ux-advocate.md`:
+Personas live in `.council/personas/` per-project and are version-controlled with your code. Each `.md` file defines one expert perspective.
 
-```markdown
-You are a **UX Advocate** on this council.
+```bash
+# Create via skill
+/council-persona "DevOps engineer focused on CI/CD and deployment reliability"
 
-Your lens: user experience, accessibility, interaction patterns, cognitive load.
+# Or drop a file manually
+cat > .council/personas/devops.md << 'EOF'
+You are a **DevOps Engineer** on this council.
+
+Your lens: CI/CD pipelines, infrastructure reliability, deployment strategies.
 
 When analyzing a question:
-- Consider the end user's perspective first
-- Evaluate accessibility implications (WCAG, screen readers, color contrast)
-- Think about error states, loading states, and edge cases from the user's POV
-- Flag any patterns that increase cognitive load or reduce usability
-...
+- Evaluate how changes affect the build and deployment pipeline
+- Consider infrastructure requirements and scaling
+- Assess rollback strategies and deployment risk
+- Think about observability: logging, metrics, alerting
+- Flag environment-specific concerns: config management, secrets
+
+You have full access to the codebase and all available tools/MCPs. USE THEM.
+EOF
 ```
 
-Then add it to the `PERSONAS` array in `council.sh`.
+## Project Structure
 
-### Modify stage prompts
+```
+claude-council/
+  setup.sh                          # Installs skills to ~/.claude/skills/
+  templates/viewer.html             # HTML viewer template
+  skills/
+    council/SKILL.md                # Main deliberation orchestrator
+    council-init/SKILL.md           # Project bootstrapper
+    council-persona/SKILL.md        # Persona creator
+    council-list-sessions/SKILL.md  # Session browser
 
-Edit files in `prompts/` to change how agents are instructed.
+your-project/
+  .council/
+    personas/                       # Version-controlled expert panel
+      architect.md
+      pragmatist.md
+      security-perf.md
+    sessions/                       # Gitignored deliberation history
+      20260413_103047_9084117b/
+        meta.json
+        stage1/opinion_*.json
+        synthesis.json
+        viewer.html
+```
 
-### Session storage
+## How It Compares
 
-All sessions live in `~/.council/{project}/`. Each session has a self-contained HTML viewer you can open in any browser.
-
-## How it compares to cliagent-council
-
-| Feature | cliagent-council | Claude Council |
-|---------|-----------------|----------------|
-| Agents | Claude + Codex + Gemini | 3x Claude Code sessions |
-| Diversity source | Different models | Expert personas |
-| Codebase access | All agents have tools | All sessions have tools |
-| 4-stage deliberation | ✅ | ✅ |
-| Peer review | ✅ | ✅ |
-| Session storage | ✅ | ✅ |
-| HTML viewer | ✅ | ✅ |
-| Nudge/revisit | ✅ | ✅ |
-| Outcome recording | ✅ | ✅ |
-| Proactive suggestions | ✅ | ✅ (via SKILL.md) |
-| Prerequisites | Bun + 2 CLI agents | Claude Code + jq |
-| Cost | 3 subscriptions | 1 subscription |
+| Feature | Standalone TUI (old) | Skill Architecture (current) |
+|---------|---------------------|------------------------------|
+| Runtime | bash + Python + Textual | Claude Code only |
+| Tool access | Hardcoded allowlist | Full MCP/tool inheritance |
+| Parallelism | Background PIDs + polling | Native Agent tool |
+| Streaming | ANSI cursor manipulation | Claude Code built-in |
+| Follow-up | `read -r` bash loop | Natural conversation |
+| Personas | Global, hardcoded | Per-project, dynamic |
+| Install | jq + python3 + textual | `setup.sh` (copies .md files) |
+| Lines of code | ~2,660 (bash+Python) | ~500 (prompt markdown) |
 
 ## License
 
