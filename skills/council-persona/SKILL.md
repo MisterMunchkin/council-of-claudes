@@ -45,7 +45,22 @@ You have full access to all available tools/MCPs. USE THEM. Read files, grep for
 
 The analysis points should be specific to the persona's expertise. They tell the agent what to pay attention to and what kind of insights to surface. Write them as actionable instructions, not vague descriptions.
 
-### Step 3: Confirm
+### Step 3: Sync autocomplete
+
+After writing the persona file, update the `/council` skill's `argument-hint` so autocomplete reflects the full set of available personas (including any added in other worktrees or sessions):
+
+```bash
+PERSONAS_DIR=".council/personas"
+SKILL_FILE="skills/council/SKILL.md"
+if [ -d "$PERSONAS_DIR" ] && [ -f "$SKILL_FILE" ]; then
+  NAMES=$(ls "$PERSONAS_DIR"/*.md 2>/dev/null | xargs -I{} basename {} .md | sort | paste -sd, -)
+  if [ -n "$NAMES" ]; then
+    sed -i '' "s/^argument-hint: .*/argument-hint: [--personas $NAMES]/" "$SKILL_FILE"
+  fi
+fi
+```
+
+### Step 4: Confirm
 
 After writing the file, tell the user:
 

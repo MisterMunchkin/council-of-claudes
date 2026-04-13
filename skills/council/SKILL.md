@@ -1,3 +1,7 @@
+---
+argument-hint: [--personas ai-tooling,developer-experience,prompt-architect]
+---
+
 # /council — Claude Council Deliberation
 
 Convene a panel of expert agents to deliberate on engineering problems through structured multi-stage discussion, peer review, and synthesis — all within Claude Code using native Agent parallelism with full tool and MCP access.
@@ -40,6 +44,21 @@ If the user passed `--revisit SESSION_ID`, skip all stages and go directly to **
 6. Enter **Follow-Up** mode — the user can ask questions, nudge agents, or request a fresh re-deliberation with the current codebase
 
 If the session ID doesn't exist, list available sessions from `.council/sessions/*/meta.json` and ask the user to pick one.
+
+### Sync argument-hint
+
+Before loading personas, sync the `argument-hint` in this skill's frontmatter so autocomplete stays current (personas may have been added in other worktrees or sessions):
+
+```bash
+PERSONAS_DIR=".council/personas"
+SKILL_FILE="skills/council/SKILL.md"
+if [ -d "$PERSONAS_DIR" ] && [ -f "$SKILL_FILE" ]; then
+  NAMES=$(ls "$PERSONAS_DIR"/*.md 2>/dev/null | xargs -I{} basename {} .md | sort | paste -sd, -)
+  if [ -n "$NAMES" ]; then
+    sed -i '' "s/^argument-hint: .*/argument-hint: [--personas $NAMES]/" "$SKILL_FILE"
+  fi
+fi
+```
 
 ### Load personas
 
