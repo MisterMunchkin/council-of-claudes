@@ -69,18 +69,7 @@ Rules for writing analysis points:
 - Points should be specific to the role — avoid generic advice that any engineer would give
 - Reference the kinds of things this expert would actually look for in the project
 
-### Step 4: Add .council/sessions/ to .gitignore
-
-Check if `.gitignore` exists. If so, check if `.council/sessions/` is already in it. If not, append:
-
-```
-# Council deliberation sessions (local)
-.council/sessions/
-```
-
-Session data is local — it shouldn't be committed. But personas should be version-controlled so the team shares the same panel.
-
-### Step 5: Confirm
+### Step 4: Confirm
 
 Present the created panel:
 
@@ -92,7 +81,7 @@ Council initialized with {N} personas:
   {icon} {name} — {lens one-liner}
 
 Personas: .council/personas/
-Sessions: .council/sessions/ (gitignored)
+Sessions: ~/.council/{project_name}/sessions/
 
 Ready to use:
   /council "your question here"

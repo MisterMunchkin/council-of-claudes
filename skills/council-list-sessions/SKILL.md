@@ -12,10 +12,17 @@ Show a table of past council sessions for the current project.
 
 ### Step 1: Find sessions
 
-Read all `.council/sessions/*/meta.json` files in the current project directory.
+Derive the project name from the current working directory and look for sessions in the home directory:
 
-If `.council/sessions/` doesn't exist or has no sessions, tell the user:
-> No council sessions found. Run `/council "your question"` to start one.
+```bash
+PROJECT_NAME="$(basename "$(pwd)")"
+SESSION_BASE="$HOME/.council/${PROJECT_NAME}/sessions"
+```
+
+Read all `${SESSION_BASE}/*/meta.json` files.
+
+If `${SESSION_BASE}` doesn't exist or has no sessions, tell the user:
+> No council sessions found for project **{PROJECT_NAME}**. Run `/council "your question"` to start one.
 
 ### Step 2: Present the table
 
@@ -38,7 +45,7 @@ Sort sessions by timestamp (most recent first). Present as a markdown table:
 After the table:
 
 > To revisit a session: `/council --revisit SESSION_ID`
-> To open the viewer: The HTML viewer is at `.council/sessions/SESSION_ID/viewer.html`
+> To open the viewer: The HTML viewer is at `~/.council/{PROJECT_NAME}/sessions/SESSION_ID/viewer.html`
 
 ## Rules
 

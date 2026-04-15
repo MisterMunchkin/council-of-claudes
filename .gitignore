@@ -1,2 +1,1 @@
-# Council deliberation sessions (local)
-.council/sessions/
+# Council sessions are stored in ~/.council/ (not in the project directory)
