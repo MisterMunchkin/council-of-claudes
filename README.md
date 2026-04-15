@@ -37,7 +37,7 @@ Claude Council runs as a set of Claude Code skills. The orchestration is prompt-
     └── Stage 3: Chairman Synthesis (model: opus)
         Reads all opinions, renders verdict with action items
         │
-        └── Output: .council/sessions/{id}/
+        └── Output: ~/.council/{project}/sessions/{id}/
             ├── meta.json, opinion_*.json, synthesis.json
             └── viewer.html (self-contained, dark/light mode)
 ```
@@ -53,10 +53,12 @@ Every spawned agent has full access to all tools and MCP servers available in th
 | `/council --quick "question"` | Opinions only, skip synthesis |
 | `/council --personas a,b "question"` | Use specific personas |
 | `/council --revisit SESSION_ID` | Reload and discuss a past session |
+| `/council --dashboard` | Open the session browser in your browser |
 | `/council-init` | Bootstrap personas for the current project |
 | `/council-init "description"` | Generate tailored personas from a description |
 | `/council-persona "description"` | Add a single persona |
 | `/council-list-sessions` | Browse past deliberations |
+| `/council-migrate` | Move old `.council/sessions/` to `~/.council/` |
 
 ## Personas
 
@@ -89,11 +91,13 @@ EOF
 claude-council/
   setup.sh                          # Installs skills to ~/.claude/skills/
   templates/viewer.html             # HTML viewer template
+  templates/dashboard.html          # HTML dashboard template
   skills/
     council/SKILL.md                # Main deliberation orchestrator
     council-init/SKILL.md           # Project bootstrapper
     council-persona/SKILL.md        # Persona creator
     council-list-sessions/SKILL.md  # Session browser
+    council-migrate/SKILL.md        # Session migration tool
 
 your-project/
   .council/
@@ -101,7 +105,10 @@ your-project/
       architect.md
       pragmatist.md
       security-perf.md
-    sessions/                       # Gitignored deliberation history
+
+~/.council/
+  your-project/
+    sessions/                       # Deliberation history, organized by project
       20260413_103047_9084117b/
         meta.json
         stage1/opinion_*.json

@@ -25,6 +25,7 @@ SKILL_DIR="${SKILLS_BASE}/council"
 INIT_SKILL_DIR="${SKILLS_BASE}/council-init"
 PERSONA_SKILL_DIR="${SKILLS_BASE}/council-persona"
 LIST_SKILL_DIR="${SKILLS_BASE}/council-list-sessions"
+MIGRATE_SKILL_DIR="${SKILLS_BASE}/council-migrate"
 
 usage() {
     echo ""
@@ -47,7 +48,7 @@ cmd_status() {
 
     # Global skills
     echo -e "${BOLD}  Global Skills${NC}"
-    for skill in council council-init council-persona council-list-sessions; do
+    for skill in council council-init council-persona council-list-sessions council-migrate; do
         if [ -f "${SKILLS_BASE}/${skill}/SKILL.md" ]; then
             ok "  /${skill} installed"
         else
@@ -55,11 +56,13 @@ cmd_status() {
         fi
     done
 
-    if [ -f "${SKILL_DIR}/templates/viewer.html" ]; then
-        ok "  HTML viewer template installed"
-    else
-        warn "  HTML viewer template missing"
-    fi
+    for tmpl in viewer.html dashboard.html; do
+        if [ -f "${SKILL_DIR}/templates/${tmpl}" ]; then
+            ok "  ${tmpl} template installed"
+        else
+            warn "  ${tmpl} template missing"
+        fi
+    done
 
     # Project-local council
     echo ""
@@ -79,11 +82,13 @@ cmd_status() {
         warn "  Not initialized — run /council-init in Claude Code"
     fi
 
-    local session_count=0
-    if [ -d ".council/sessions" ]; then
-        session_count=$(find .council/sessions -name "meta.json" 2>/dev/null | wc -l | tr -d ' ')
+    local project_name session_base session_count=0
+    project_name="$(basename "$(pwd)")"
+    session_base="${HOME}/.council/${project_name}/sessions"
+    if [ -d "${session_base}" ]; then
+        session_count=$(find "${session_base}" -name "meta.json" 2>/dev/null | wc -l | tr -d ' ')
     fi
-    log "  Sessions: ${session_count} in .council/sessions/"
+    log "  Sessions: ${session_count} in ~/.council/${project_name}/sessions/"
 
     echo ""
 }
@@ -95,7 +100,7 @@ cmd_uninstall() {
     echo ""
     log "Removing Claude Council skills..."
 
-    for skill in council council-init council-persona council-list-sessions; do
+    for skill in council council-init council-persona council-list-sessions council-migrate; do
         if [ -d "${SKILLS_BASE}/${skill}" ]; then
             rm -rf "${SKILLS_BASE}/${skill}"
             ok "Removed /${skill}"
@@ -103,8 +108,8 @@ cmd_uninstall() {
     done
 
     echo ""
-    log "${DIM}Project data in .council/ was NOT removed.${NC}"
-    log "${DIM}Delete it manually if you want: rm -rf .council/${NC}"
+    log "${DIM}Project personas in .council/ were NOT removed.${NC}"
+    log "${DIM}Session data in ~/.council/ was NOT removed.${NC}"
     echo ""
 }
 
@@ -153,9 +158,15 @@ cmd_install() {
     cp "${SCRIPT_DIR}/skills/council-list-sessions/SKILL.md" "${LIST_SKILL_DIR}/SKILL.md"
     ok "/council-list-sessions installed"
 
-    # HTML viewer template
+    mkdir -p "${MIGRATE_SKILL_DIR}"
+    cp "${SCRIPT_DIR}/skills/council-migrate/SKILL.md" "${MIGRATE_SKILL_DIR}/SKILL.md"
+    ok "/council-migrate installed"
+
+
+    # HTML templates
     cp "${SCRIPT_DIR}/templates/viewer.html" "${SKILL_DIR}/templates/viewer.html"
-    ok "HTML viewer template installed"
+    cp "${SCRIPT_DIR}/templates/dashboard.html" "${SKILL_DIR}/templates/dashboard.html"
+    ok "HTML templates installed"
 
     # Summary
     echo ""
@@ -168,6 +179,7 @@ cmd_install() {
     echo -e "    /council-init     Bootstrap personas for a project"
     echo -e "    /council-persona  Add a single persona"
     echo -e "    /council-list-sessions  Browse past deliberations"
+    echo -e "    /council-migrate  Move old sessions to ~/.council/"
     echo ""
     echo -e "  ${BOLD}Viewer:${NC}  ${SKILL_DIR}/templates/viewer.html"
     echo ""
@@ -177,7 +189,7 @@ cmd_install() {
     echo -e "    /council \"Should we use REST or GraphQL for the new endpoints?\""
     echo ""
     echo -e "  ${DIM}Personas are stored per-project in .council/personas/${NC}"
-    echo -e "  ${DIM}Sessions are stored per-project in .council/sessions/ (gitignored)${NC}"
+    echo -e "  ${DIM}Sessions are stored in ~/.council/{project}/sessions/${NC}"
     echo ""
 }
 

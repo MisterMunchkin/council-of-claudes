@@ -14,6 +14,7 @@ Convene a panel of expert agents to deliberate on engineering problems through s
 /council --quick "What testing framework should we add?"
 /council --personas architect,pragmatist "Just these two perspectives"
 /council --revisit SESSION_ID
+/council --dashboard
 ```
 
 ## Orchestration
@@ -29,21 +30,108 @@ Every spawned agent has full access to all tools and MCP servers available in th
 Extract from the user's message:
 
 - **QUESTION**: The deliberation question
-- **MODE**: `standard` (default — prompts for review after Stage 1), `--with-review` (auto-includes Stage 2, no prompt), `--quick` (Stage 1 only), or `--revisit SESSION_ID` (reload a past session)
+- **MODE**: `standard` (default — prompts for review after Stage 1), `--with-review` (auto-includes Stage 2, no prompt), `--quick` (Stage 1 only), `--revisit SESSION_ID` (reload a past session), or `--dashboard` (generate and open the session browser)
 - **PERSONAS**: If `--personas` flag given, use those names. Otherwise use all personas in the directory.
+
+### Handle --dashboard
+
+If the user passed `--dashboard`, skip all deliberation stages and generate the session browser:
+
+1. Check that the dashboard template exists at `~/.claude/skills/council/templates/dashboard.html`. If missing, tell the user to run `./setup.sh` and stop.
+2. Generate the dashboard:
+
+```bash
+python3 -c "
+import sys, json, glob, os
+from datetime import datetime, timezone
+
+def safe(s):
+    return s.replace('</', '<\\\\/')
+
+template_path = sys.argv[1]
+council_dir = os.path.expanduser('~/.council')
+os.makedirs(council_dir, exist_ok=True)
+output_path = os.path.join(council_dir, 'dashboard.html')
+
+template = open(template_path).read()
+
+sessions = []
+for meta_path in sorted(glob.glob(os.path.join(council_dir, '*', 'sessions', '*', 'meta.json'))):
+    try:
+        meta = json.load(open(meta_path))
+        session_dir = os.path.dirname(meta_path)
+
+        # Read verdict from synthesis if available
+        verdict = ''
+        synth_path = os.path.join(session_dir, 'synthesis.json')
+        if os.path.exists(synth_path):
+            try:
+                synth = json.load(open(synth_path))
+                verdict = synth.get('verdict', '')
+            except:
+                pass
+
+        # Check for viewer.html
+        viewer_path = os.path.join(session_dir, 'viewer.html')
+        viewer_rel = viewer_path if os.path.exists(viewer_path) else ''
+
+        sessions.append({
+            'meta': meta,
+            'verdict': verdict,
+            'viewer_path': viewer_rel
+        })
+    except:
+        continue
+
+# Sort by timestamp descending
+sessions.sort(key=lambda s: s['meta'].get('timestamp', ''), reverse=True)
+
+generated = datetime.now(timezone.utc).isoformat()
+
+template = template.replace('__SESSIONS_JSON__', safe(json.dumps(sessions)))
+template = template.replace('__GENERATED_TS__', generated)
+
+with open(output_path, 'w') as f:
+    f.write(template)
+
+projects = len(set(s['meta'].get('project', '') for s in sessions))
+print(f'{len(sessions)} sessions across {projects} projects')
+print(output_path)
+" ~/.claude/skills/council/templates/dashboard.html
+```
+
+3. Open it:
+
+```bash
+DASHBOARD="$HOME/.council/dashboard.html"
+if command -v open &>/dev/null; then
+  open "$DASHBOARD"
+elif command -v xdg-open &>/dev/null; then
+  xdg-open "$DASHBOARD"
+else
+  echo "Open $DASHBOARD in your browser"
+fi
+```
+
+Tell the user:
+> **Dashboard**: `~/.council/dashboard.html` — report the counts from the script output.
+
+Then stop — do not proceed to any deliberation stages.
 
 ### Handle --revisit
 
 If the user passed `--revisit SESSION_ID`, skip all stages and go directly to **Revisit Mode**:
 
-1. Read `.council/sessions/{SESSION_ID}/meta.json` to get the original question and personas
-2. Read `.council/sessions/{SESSION_ID}/synthesis.json` for the verdict
-3. Read all `.council/sessions/{SESSION_ID}/stage1/opinion_*.json` for individual opinions
-4. Present the results using the same format as **Presenting Results**
-5. If `${SESSION_DIR}/viewer.html` does not exist, generate it using the **Generate HTML Viewer** steps
-6. Enter **Follow-Up** mode — the user can ask questions, nudge agents, or request a fresh re-deliberation with the current codebase
+1. Derive `PROJECT_NAME` and `SESSION_BASE` as described in **Initialize session**
+2. Set `SESSION_DIR="${SESSION_BASE}/${SESSION_ID}"`
+3. Read `${SESSION_DIR}/meta.json` to get the original question and personas
+4. Read `${SESSION_DIR}/synthesis.json` for the verdict
+5. Read all `${SESSION_DIR}/stage1/opinion_*.json` for individual opinions
+6. Present the results using the same format as **Presenting Results**
+7. If `${SESSION_DIR}/viewer.html` does not exist, generate it using the **Generate HTML Viewer** steps
+8. Enter **Follow-Up** mode — the user can ask questions, nudge agents, or request a fresh re-deliberation with the current codebase
 
-If the session ID doesn't exist, list available sessions from `.council/sessions/*/meta.json` and ask the user to pick one.
+If the session ID doesn't exist, list available sessions from `${SESSION_BASE}/*/meta.json` and ask the user to pick one.
 
 ### Sync argument-hint
 
@@ -72,11 +160,13 @@ If no `--personas` flag, load all `.md` files in the personas directory.
 
 ### Initialize session
 
-Create a session directory for storing results and the HTML viewer:
+Session artifacts are stored in `~/.council/{PROJECT_NAME}/sessions/` so they persist across worktrees and don't pollute the project directory. `PROJECT_NAME` is the basename of the current working directory.
 
 ```bash
+PROJECT_NAME="$(basename "$(pwd)")"
 SESSION_ID="$(date +%Y%m%d_%H%M%S)_$(openssl rand -hex 4)"
-SESSION_DIR=".council/sessions/${SESSION_ID}"
+SESSION_BASE="$HOME/.council/${PROJECT_NAME}/sessions"
+SESSION_DIR="${SESSION_BASE}/${SESSION_ID}"
 mkdir -p "${SESSION_DIR}/stage1" "${SESSION_DIR}/stage2"
 ```
 
