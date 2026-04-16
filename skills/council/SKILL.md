@@ -1,5 +1,5 @@
 ---
-argument-hint: [--all, --personas ai-tooling,developer-experience,prompt-architect]
+argument-hint: [--all, --peer-review, --dashboard, --revisit, --personas ai-tooling,developer-experience,prompt-architect]
 ---
 
 # /council — Claude Council Deliberation
@@ -152,6 +152,7 @@ BASE="${BASE_BRANCH:-main}"
 COMMITS="$(git log --oneline ${BASE}...HEAD 2>/dev/null)"
 DIFFSTAT="$(git diff --stat ${BASE}...HEAD 2>/dev/null)"
 DIFF="$(git diff ${BASE}...HEAD 2>/dev/null)"
+DIFF_SIZE="$(echo "$DIFF" | wc -c)"
 CHANGED_FILES="$(git diff --name-only ${BASE}...HEAD 2>/dev/null)"
 ```
 
@@ -183,7 +184,7 @@ Review the changes in this pull request.
 {user's additional context if provided}
 ```
 
-If the full diff is too large (over 30KB), omit it from the question and instead instruct agents to run `git diff {BASE}...HEAD` themselves to read specific sections. Always include the diffstat and commit log.
+If `DIFF_SIZE` exceeds 30000 bytes, omit `{DIFF}` from the question and instead instruct agents to run `git diff {BASE}...HEAD` themselves to read specific sections. Always include the diffstat and commit log.
 
 **Step 3: Continue with the standard pipeline**
 
@@ -204,7 +205,7 @@ SKILL_FILE="$HOME/.claude/skills/council/SKILL.md"
 if [ -d "$PERSONAS_DIR" ] && [ -f "$SKILL_FILE" ]; then
   NAMES=$(ls "$PERSONAS_DIR"/*.md 2>/dev/null | xargs -I{} basename {} .md | sort | paste -sd, -)
   if [ -n "$NAMES" ]; then
-    sed -i '' "s/^argument-hint: .*/argument-hint: [--all, --personas $NAMES]/" "$SKILL_FILE"
+    sed -i.bak "s/^argument-hint: .*/argument-hint: [--all, --peer-review, --dashboard, --revisit, --personas $NAMES]/" "$SKILL_FILE" && rm -f "$SKILL_FILE.bak"
   fi
 fi
 ```

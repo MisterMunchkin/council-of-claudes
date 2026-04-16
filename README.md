@@ -63,6 +63,16 @@ Every spawned agent has full access to all tools and MCP servers available in th
 | `/council-list-sessions` | Browse past deliberations |
 | `/council-migrate` | Move old `.council/sessions/` to `~/.council/` |
 
+### CI / `--peer-review` mode
+
+The `--peer-review` flag runs a fully non-interactive deliberation on the current branch's changes. It auto-gathers the diff, triages personas, and lets the chairman decide if peer review is needed.
+
+Set `BASE_BRANCH` to override the default base branch (defaults to `main`):
+
+```bash
+BASE_BRANCH=develop claude -p "/council --peer-review"
+```
+
 ## Personas
 
 Personas live in `.council/personas/` per-project and are version-controlled with your code. Each `.md` file defines one expert perspective.
