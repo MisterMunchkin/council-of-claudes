@@ -1,5 +1,5 @@
 ---
-argument-hint: [--personas ai-tooling,developer-experience,prompt-architect]
+argument-hint: [--all, --personas ai-tooling,developer-experience,prompt-architect]
 ---
 
 # /council — Claude Council Deliberation
@@ -13,6 +13,9 @@ Convene a panel of expert agents to deliberate on engineering problems through s
 /council --with-review "How should we restructure the auth module?"
 /council --quick "What testing framework should we add?"
 /council --personas architect,pragmatist "Just these two perspectives"
+/council --all "Force all personas even if some seem irrelevant"
+/council --peer-review "Focus on security and test coverage"
+/council --peer-review
 /council --revisit SESSION_ID
 /council --dashboard
 ```
@@ -30,8 +33,8 @@ Every spawned agent has full access to all tools and MCP servers available in th
 Extract from the user's message:
 
 - **QUESTION**: The deliberation question
-- **MODE**: `standard` (default — prompts for review after Stage 1), `--with-review` (auto-includes Stage 2, no prompt), `--quick` (Stage 1 only), `--revisit SESSION_ID` (reload a past session), or `--dashboard` (generate and open the session browser)
-- **PERSONAS**: If `--personas` flag given, use those names. Otherwise use all personas in the directory.
+- **MODE**: `standard` (default — chairman decides if peer review is needed), `--with-review` (always includes Stage 2), `--quick` (Stage 1 only), `--peer-review` (CI mode for PR reviews — non-interactive, auto-gathers diff), `--revisit SESSION_ID` (reload a past session), or `--dashboard` (generate and open the session browser)
+- **PERSONAS**: If `--personas` flag given, use those names. If `--all` flag given, use every persona. Otherwise, triage for relevance (see below).
 
 ### Handle --dashboard
 
@@ -133,17 +136,75 @@ If the user passed `--revisit SESSION_ID`, skip all stages and go directly to **
 
 If the session ID doesn't exist, list available sessions from `${SESSION_BASE}/*/meta.json` and ask the user to pick one.
 
+### Handle --peer-review
+
+This mode is designed for CI pipelines (e.g., GitHub Actions). It runs a fully non-interactive deliberation on the current branch's changes — no triage confirmation, no user prompts, chairman decides everything.
+
+**Step 1: Gather PR context**
+
+Run these commands to collect the diff context:
+
+```bash
+# Detect base branch — use $BASE_BRANCH env var if set, otherwise default to main
+BASE="${BASE_BRANCH:-main}"
+
+# Gather context
+COMMITS="$(git log --oneline ${BASE}...HEAD 2>/dev/null)"
+DIFFSTAT="$(git diff --stat ${BASE}...HEAD 2>/dev/null)"
+DIFF="$(git diff ${BASE}...HEAD 2>/dev/null)"
+CHANGED_FILES="$(git diff --name-only ${BASE}...HEAD 2>/dev/null)"
+```
+
+If the diff is empty (no commits ahead of base), tell the user and stop.
+
+**Step 2: Build the question**
+
+Construct the deliberation question automatically. If the user provided text after `--peer-review`, append it as additional focus areas. Otherwise use the default:
+
+```
+Review the changes in this pull request.
+
+## Commits
+{COMMITS}
+
+## Changed Files
+{DIFFSTAT}
+
+## Full Diff
+{DIFF}
+
+## Focus Areas
+- Code quality and adherence to project conventions
+- Potential bugs or edge cases
+- Security concerns
+- Architecture and design decisions
+- Test coverage gaps
+
+{user's additional context if provided}
+```
+
+If the full diff is too large (over 30KB), omit it from the question and instead instruct agents to run `git diff {BASE}...HEAD` themselves to read specific sections. Always include the diffstat and commit log.
+
+**Step 3: Continue with the standard pipeline**
+
+After building the question, fall through to the normal flow starting from **Sync argument-hint**. The following behaviors apply in `--peer-review` mode:
+
+- **Triage**: runs automatically, no confirmation (same as `--quick` and `--with-review`)
+- **Chairman pre-assessment**: runs — chairman decides if Stage 2 peer review is warranted
+- **All stages complete without user interaction**
+- **HTML viewer is generated** as normal (CI can upload it as an artifact)
+
 ### Sync argument-hint
 
 Before loading personas, sync the `argument-hint` in this skill's frontmatter so autocomplete stays current (personas may have been added in other worktrees or sessions):
 
 ```bash
 PERSONAS_DIR=".council/personas"
-SKILL_FILE="skills/council/SKILL.md"
+SKILL_FILE="$HOME/.claude/skills/council/SKILL.md"
 if [ -d "$PERSONAS_DIR" ] && [ -f "$SKILL_FILE" ]; then
   NAMES=$(ls "$PERSONAS_DIR"/*.md 2>/dev/null | xargs -I{} basename {} .md | sort | paste -sd, -)
   if [ -n "$NAMES" ]; then
-    sed -i '' "s/^argument-hint: .*/argument-hint: [--personas $NAMES]/" "$SKILL_FILE"
+    sed -i '' "s/^argument-hint: .*/argument-hint: [--all, --personas $NAMES]/" "$SKILL_FILE"
   fi
 fi
 ```
@@ -156,14 +217,40 @@ If `.council/personas/` doesn't exist or is empty, tell the user to run `/counci
 
 If `--personas` was specified, load only those. If a requested persona doesn't exist, tell the user and suggest `/council-persona` to create it.
 
-If no `--personas` flag, load all `.md` files in the personas directory.
+If `--all` flag, load all `.md` files and skip triage. If neither `--personas` nor `--all` was specified, load all `.md` files as triage candidates.
+
+### Triage personas for relevance
+
+Skip this step if `--personas` or `--all` was specified — those are explicit overrides.
+
+When no flag is given, you (the orchestrator) must select only the personas whose expertise is relevant to the question. This prevents wasting tokens on perspectives that add no value (e.g., a UX persona reviewing CI/CD pipeline YAML).
+
+**How to triage:**
+
+1. Read the first three lines of each loaded persona file — line 1 contains the role declaration, line 3 contains the lens description. Use both to assess relevance.
+2. Consider the question and any obvious context clues (mentioned files, technologies, domains).
+3. If the question references specific files or a PR, do a quick scan (e.g., list changed files) to understand what domain the work touches.
+4. For each persona, ask: *"Would this expert have a meaningfully different perspective on this question, or would they be stretching outside their domain?"* Drop personas that would be stretching.
+5. **Minimum 2 personas** — a council of one isn't a deliberation. If only 1 survives triage, keep the next-closest.
+6. **When in doubt, keep.** Only drop personas you're confident are irrelevant. A security reviewer on a "refactor the auth module" question is relevant even if the question doesn't explicitly mention security.
+
+**Report your selection** before proceeding:
+
+> **Personas selected** ({N} of {TOTAL}): **architect**, **security-perf**
+> *Excluded*: **ux-designer** — question is about CI pipeline configuration, no user-facing impact.
+
+If the user disagrees, they can say so and you adjust before launching Stage 1.
+
+In `--quick`, `--with-review`, or `--peer-review` mode, proceed immediately after reporting the selection — do not wait for user confirmation. These modes are designed to run without interactive gates.
 
 ### Initialize session
 
-Session artifacts are stored in `~/.council/{PROJECT_NAME}/sessions/` so they persist across worktrees and don't pollute the project directory. `PROJECT_NAME` is the basename of the current working directory.
+Session artifacts are stored in `~/.council/{PROJECT_NAME}/sessions/` so they persist across worktrees and don't pollute the project directory. `PROJECT_NAME` is the basename of the git repository's main worktree — this ensures all worktrees of the same repo share a single session directory.
 
 ```bash
-PROJECT_NAME="$(basename "$(pwd)")"
+# Use the main worktree basename so all worktrees share one session folder
+MAIN_WORKTREE="$(git worktree list --porcelain 2>/dev/null | head -1 | sed 's/^worktree //')"
+PROJECT_NAME="$(basename "${MAIN_WORKTREE:-$(pwd)}")"
 SESSION_ID="$(date +%Y%m%d_%H%M%S)_$(openssl rand -hex 4)"
 SESSION_BASE="$HOME/.council/${PROJECT_NAME}/sessions"
 SESSION_DIR="${SESSION_BASE}/${SESSION_ID}"
@@ -179,11 +266,15 @@ Write a `meta.json` to the session directory:
   "project_dir": "/current/working/dir",
   "question": "the question",
   "mode": "standard",
-  "personas": ["architect", "pragmatist", "security-perf"],
+  "personas": ["architect", "security-perf"],
+  "excluded_personas": ["ux-designer"],
   "timestamp": "ISO 8601 UTC",
   "status": "in_progress"
 }
 ```
+
+- `personas` — the personas that will participate (after triage, or as explicitly requested)
+- `excluded_personas` — personas dropped by triage (empty array if `--personas` or `--all` was used)
 
 ---
 
@@ -257,18 +348,59 @@ Then show each persona's recommendation as a one-liner so the user sees progress
 
 If `--quick` mode: skip to **Presenting Results** and **Generate Viewer**.
 
-### Prompt for peer review
+If `--with-review` was passed, skip the chairman pre-assessment and go straight to Stage 2.
 
-If the mode is `standard` (not `--quick` and not `--with-review`), ask the user:
+### Chairman pre-assessment
 
-> The council has given their opinions. Would you like them to **peer review** each other's positions before synthesis? This adds an anonymous scoring round where each agent evaluates the others.
->
-> **y** — run peer review, then synthesize
-> **n** — skip to synthesis (default)
+In `standard` and `--peer-review` modes, the chairman decides whether peer review would add value — the user is never prompted.
 
-If the user says yes, proceed to Stage 2. If no (or if they just want to move on), skip to Stage 3.
+Launch **1 Agent call** using `model: "opus"`. Description: `"Council: chairman pre-assessment"`.
 
-If `--with-review` was passed, skip this prompt and go straight to Stage 2.
+```
+You are the Chairman of an expert council. You have received independent opinions from all council members. Before synthesizing a verdict, you must decide whether a peer review round would improve the outcome.
+
+## Original Question
+
+{QUESTION}
+
+## All Stage 1 Opinions
+
+### {persona_name}'s Opinion:
+{full JSON opinion}
+
+(repeat for each persona)
+
+## Instructions
+
+Assess the opinions and decide if a peer review round is warranted. Peer review is valuable when:
+- Opinions contain factual claims that contradict each other
+- Confidence scores diverge significantly (e.g., 0.9 vs 0.5)
+- Multiple agents reference the same evidence but draw opposite conclusions
+- The question is high-stakes (security, data integrity, architecture) and you want claims verified
+
+Peer review is NOT needed when:
+- Opinions broadly agree with minor variations
+- The question is exploratory or low-stakes
+- Evidence is clear and non-contradictory
+- Adding a review round would just confirm what's already obvious
+
+## Output Format
+
+Respond with ONLY a valid JSON object — no markdown fences, no preamble.
+
+{
+  "needs_peer_review": true,
+  "reason": "Brief explanation of why peer review is or isn't warranted."
+}
+```
+
+Parse the chairman's response:
+- If `needs_peer_review` is `true`, tell the user:
+  > **Chairman**: Requesting peer review — {reason}
+  Then proceed to **Stage 2**.
+- If `false`, tell the user:
+  > **Chairman**: Peer review not needed — {reason}
+  Then skip to **Stage 3**.
 
 ---
 
@@ -348,7 +480,7 @@ You are the Chairman of an expert council. You must synthesize all opinions into
 
 ## Peer Review Results
 
-{If --with-review: include all review JSONs with reviewer names. Otherwise: "No peer reviews conducted."}
+{If peer review was conducted (--with-review, or chairman requested it): include all review JSONs with reviewer names. Otherwise: "No peer reviews conducted."}
 
 ## Instructions
 
@@ -431,7 +563,7 @@ For `--quick` mode, run the same status update after writing opinion files (befo
 
 After synthesis (or Stage 1 in `--quick` mode), present results to the user in clean markdown. Parse the JSON and format it readably — don't dump raw JSON.
 
-For standard/with-review modes:
+For standard/with-review/peer-review modes:
 
 ```markdown
 ---

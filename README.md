@@ -31,11 +31,13 @@ Claude Council runs as a set of Claude Code skills. The orchestration is prompt-
     ├── Stage 1: Parallel Agent calls (one per persona, model: sonnet)
     │   Each agent investigates available artifacts independently
     │
-    ├── Stage 2: Peer Review (optional, --with-review)
+    ├── Chairman Pre-Assessment (decides if peer review is needed)
+    │
+    ├── Stage 2: Peer Review (if chairman requests it, --with-review, or --peer-review)
     │   Each agent anonymously scores the others
     │
     └── Stage 3: Chairman Synthesis (model: opus)
-        Reads all opinions, renders verdict with action items
+        Reads all opinions (+ reviews if conducted), renders verdict
         │
         └── Output: ~/.council/{project}/sessions/{id}/
             ├── meta.json, opinion_*.json, synthesis.json
@@ -48,8 +50,9 @@ Every spawned agent has full access to all tools and MCP servers available in th
 
 | Skill | Description |
 |-------|-------------|
-| `/council "question"` | Run a deliberation (standard: Stage 1 + 3) |
-| `/council --with-review "question"` | Include peer review (Stage 1 + 2 + 3) |
+| `/council "question"` | Run a deliberation (chairman decides if peer review needed) |
+| `/council --with-review "question"` | Force peer review (Stage 1 + 2 + 3) |
+| `/council --peer-review` | CI mode — auto-gathers PR diff, fully non-interactive |
 | `/council --quick "question"` | Opinions only, skip synthesis |
 | `/council --personas a,b "question"` | Use specific personas |
 | `/council --revisit SESSION_ID` | Reload and discuss a past session |
@@ -85,6 +88,24 @@ You have full access to the codebase and all available tools/MCPs. USE THEM.
 EOF
 ```
 
+## Intent (Agent Plugin)
+
+Council ships an **intent skill** — a lightweight file that teaches agents in other projects how to use council. Copy it into any project so agents know when and how to suggest deliberation.
+
+```bash
+# Add council awareness to another project
+mkdir -p /path/to/project/.claude/skills/claude-council
+cp intent/SKILL.md /path/to/project/.claude/skills/claude-council/SKILL.md
+```
+
+Once installed, agents working in that project will:
+- Suggest `/council` when they detect complex decisions or architecture questions
+- Know the available modes (`--quick`, `--with-review`, `--peer-review`)
+- Guide users through setup if personas aren't configured yet
+- Understand what personas are available and how to add new ones
+
+The intent file is self-contained — it doesn't require the full council skills to provide context. But the council skills (`/council`, `/council-init`, etc.) must be installed globally via `setup.sh` for the commands to actually work.
+
 ## Project Structure
 
 ```
@@ -92,6 +113,7 @@ claude-council/
   setup.sh                          # Installs skills to ~/.claude/skills/
   templates/viewer.html             # HTML viewer template
   templates/dashboard.html          # HTML dashboard template
+  intent/SKILL.md                   # Agent plugin — copy to other projects
   skills/
     council/SKILL.md                # Main deliberation orchestrator
     council-init/SKILL.md           # Project bootstrapper
