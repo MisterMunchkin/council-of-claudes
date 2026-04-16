@@ -1,5 +1,5 @@
 ---
-argument-hint: [--all, --peer-review, --dashboard, --revisit, --personas ai-tooling,developer-experience,prompt-architect]
+argument-hint: [--all, --peer-review, --dashboard, --revisit, --max-turns 25, --personas ai-tooling,developer-experience,prompt-architect]
 ---
 
 # /council — Claude Council Deliberation
@@ -15,6 +15,7 @@ Convene a panel of expert agents to deliberate on engineering problems through s
 /council --personas architect,pragmatist "Just these two perspectives"
 /council --all "Force all personas even if some seem irrelevant"
 /council --peer-review "Focus on security and test coverage"
+/council --peer-review --max-turns 30
 /council --peer-review
 /council --revisit SESSION_ID
 /council --dashboard
@@ -35,6 +36,7 @@ Extract from the user's message:
 - **QUESTION**: The deliberation question
 - **MODE**: `standard` (default — chairman decides if peer review is needed), `--with-review` (always includes Stage 2), `--quick` (Stage 1 only), `--peer-review` (CI mode for PR reviews — non-interactive, auto-gathers diff), `--revisit SESSION_ID` (reload a past session), or `--dashboard` (generate and open the session browser)
 - **PERSONAS**: If `--personas` flag given, use those names. If `--all` flag given, use every persona. Otherwise, triage for relevance (see below).
+- **MAX_TURNS**: If `--max-turns N` flag given, set the turn budget to N. Otherwise default to **unlimited** (no budget enforcement). When set, the orchestrator must plan its pipeline to complete within N orchestrator turns — see **Turn budget** under `--peer-review` for the planning strategy. This flag works with any mode but is most important for `--peer-review` in CI.
 
 ### Handle --dashboard
 
@@ -138,7 +140,52 @@ If the session ID doesn't exist, list available sessions from `${SESSION_BASE}/*
 
 ### Handle --peer-review
 
-This mode is designed for CI pipelines (e.g., GitHub Actions). It runs a fully non-interactive deliberation on the current branch's changes — no triage confirmation, no user prompts, chairman decides everything.
+This mode is designed for CI pipelines (e.g., GitHub Actions). It runs a fully non-interactive, **read-only** deliberation on the current branch's changes — no triage confirmation, no user prompts, chairman decides everything.
+
+> **GUARD RAILS — READ-ONLY MODE**
+>
+> `--peer-review` is strictly observational. The orchestrator and all spawned agents MUST NOT:
+> - Edit, write, or delete any files in the working tree
+> - Run `git commit`, `git push`, `git checkout`, `git stash`, or any state-changing git command
+> - Execute code-modification tools (Edit, Write, NotebookEdit) or run scripts that mutate the codebase
+> - Auto-apply any action items or fixes
+>
+> Agents MAY use read-only tools: Read, Grep, Glob, Bash (for read-only commands like `git diff`, `git log`, `ls`), and MCP read operations.
+>
+> The output is a **summary report** — findings, confidence scores, and copy-paste prompts the user can execute themselves.
+
+**Turn budget**: When `--max-turns N` is set, the orchestrator must plan its pipeline to complete within N orchestrator turns. If `--max-turns` is not set, there is no budget enforcement — run the full pipeline.
+
+Each step of the pipeline costs roughly this many orchestrator turns:
+
+| Step | ~Turns |
+|------|--------|
+| Gather context + build question | 2–3 |
+| Sync argument-hint + load personas + triage | 3–4 |
+| Launch Stage 1 agents (1 call) + collect results | 2 |
+| Chairman pre-assessment | 2 |
+| Stage 2 if requested (1 call) + collect | 2 |
+| Stage 3 synthesis | 2 |
+| Present results | 1 |
+| Generate viewer | 2–3 |
+
+**Planning strategy**: At the start of the pipeline (after parsing flags), calculate what fits within the budget. Use these tiers:
+
+| Budget | Strategy |
+|--------|----------|
+| **N >= 25** | Full pipeline: up to 4 personas, Stage 2 if chairman requests, viewer |
+| **20 <= N < 25** | Standard: 2–3 personas, Stage 2 if chairman requests, viewer |
+| **15 <= N < 20** | Lean: 2–3 personas, skip Stage 2 (go straight to synthesis), viewer |
+| **N < 15** | Minimal: 2 personas, skip Stage 2, skip viewer, present results only |
+
+**Adaptation rules**:
+- **Persona count is the biggest lever.** Each additional persona doesn't add orchestrator turns (they run in parallel), but more opinions means a heavier synthesis prompt. Prefer fewer, more relevant personas when the budget is tight.
+- **Stage 2 is the first thing to cut.** A single pass with synthesis is far more valuable than an incomplete two-pass run.
+- **Viewer is the second thing to cut.** A verdict without a viewer is useful; a viewer without a verdict is not.
+- **Never cut Stage 3 synthesis.** The verdict is the whole point. If the budget can't fit synthesis, reduce persona count until it can.
+
+Report the plan after triage:
+> **Turn budget**: {N} turns — running **{tier name}** pipeline ({persona count} personas, {with/without} Stage 2, {with/without} viewer)
 
 **Step 1: Gather PR context**
 
@@ -190,10 +237,12 @@ If `DIFF_SIZE` exceeds 30000 bytes, omit `{DIFF}` from the question and instead 
 
 After building the question, fall through to the normal flow starting from **Sync argument-hint**. The following behaviors apply in `--peer-review` mode:
 
+- **Read-only enforcement**: all agents are instructed to only use read-only tools (see guard rails above)
 - **Triage**: runs automatically, no confirmation (same as `--quick` and `--with-review`)
 - **Chairman pre-assessment**: runs — chairman decides if Stage 2 peer review is warranted
 - **All stages complete without user interaction**
 - **HTML viewer is generated** as normal (CI can upload it as an artifact)
+- **No follow-up actions**: after presenting results, stop — do not offer to apply fixes or spawn action agents
 
 ### Sync argument-hint
 
@@ -305,6 +354,9 @@ You are a council member deliberating on a question. You must provide your indep
 1. **Investigate first.** Use your tools to examine available artifacts before forming an opinion. Read relevant files, grep for patterns, check git history, review documents and specs. You have full access to all tools and MCP servers — use whatever is most effective. If GitNexus or other knowledge graph tools are available, use them to query architecture, dependencies, and impact analysis.
 2. **Form your opinion.** Based on what you found, provide a clear recommendation.
 3. **Be thorough but concise.** Reference specific files and patterns. Do NOT paste entire files or raw grep output.
+
+{If MODE is --peer-review, append this block:}
+**READ-ONLY MODE**: This is a peer review session. You MUST NOT edit, write, or delete any files. Do NOT use the Edit, Write, or NotebookEdit tools. Do NOT run git commands that change state (commit, push, checkout, stash). Only use read-only tools: Read, Grep, Glob, and read-only Bash commands (git diff, git log, ls, etc.). Your job is to analyze and report findings — not to fix them.
 
 ## Output Format
 
@@ -434,6 +486,9 @@ For EACH opinion, evaluate:
 2. **Completeness**: Did they miss important considerations?
 3. **Feasibility**: Is their recommendation practical to implement?
 
+{If MODE is --peer-review, append this block:}
+**READ-ONLY MODE**: This is a peer review session. You MUST NOT edit, write, or delete any files. Only use read-only tools (Read, Grep, Glob, read-only Bash). Your job is to review and critique — not to fix.
+
 ## Output Format
 
 Respond with ONLY a valid JSON object — no markdown fences, no preamble.
@@ -493,6 +548,9 @@ You are the Chairman of an expert council. You must synthesize all opinions into
 
 You have full access to the codebase and all tools/MCPs. Verify any claims you find questionable.
 
+{If MODE is --peer-review, append this block:}
+**READ-ONLY MODE**: This is a peer review session. You MUST NOT edit, write, or delete any files. Only use read-only tools. Focus on producing actionable `ai_prompt` values that the user can copy-paste to fix issues — do not attempt fixes yourself.
+
 ## Output Format
 
 Respond with ONLY a valid JSON object — no markdown fences, no preamble.
@@ -528,7 +586,7 @@ Respond with ONLY a valid JSON object — no markdown fences, no preamble.
       "priority": "high",
       "type": "action",
       "action": "Description of what to do, with `code refs`",
-      "ai_prompt": "Complete prompt to copy-paste into Claude Code to execute this. Include files, constraints, intent. Set to null for type: note."
+      "ai_prompt": "Prompt the user can copy-paste into a separate Claude Code session to execute this fix. Include files, constraints, intent. The orchestrator MUST NOT execute this prompt — it is for the user only. Set to null for type: note."
     }
   ],
   "revisit_triggers": [
@@ -595,6 +653,27 @@ For standard/with-review/peer-review modes:
 ```
 
 For `--quick` mode, show each persona's full opinion with headers.
+
+For `--peer-review` mode, use the same format as standard but add these sections:
+
+```markdown
+### Confidence Scores
+| Persona | Confidence | Assessment |
+|---------|-----------|------------|
+| {persona} | {score} | {high/medium/low label} |
+| **Overall** | **{overall}** | |
+
+### Fix Prompts
+{For each ACTION item, render the ai_prompt in a clearly labeled fenced block:}
+
+**{priority} — {action description}**
+```
+{ai_prompt}
+```
+
+{End with a reminder:}
+> **Note**: This is a read-only review. No files were modified. Copy the prompts above into Claude Code to apply fixes.
+```
 
 ---
 
@@ -666,11 +745,17 @@ fi
 Tell the user:
 > **Viewer**: `{SESSION_DIR}/viewer.html`
 
+**After generating the viewer, STOP and wait for user input.** Do not apply action items, make code changes, or spawn fix agents unless the user explicitly asks. Your role as orchestrator ends at presenting findings. The `ai_prompt` fields in action items are for the **user** to copy — not for you to execute.
+
 ---
 
 ## Follow-Up
 
-After presenting results (whether from a fresh deliberation or `--revisit`), handle follow-up questions:
+After presenting results (whether from a fresh deliberation or `--revisit`), handle follow-up questions **only when the user initiates them**.
+
+**Exception — `--peer-review` mode**: After presenting results and generating the viewer, the session is **complete**. Do not enter follow-up mode, do not offer to apply fixes, and do not spawn action agents. If the user wants to act on findings, they should copy the prompts or start a new non-peer-review session.
+
+For all other modes:
 
 1. **Answerable from existing analysis** — answer directly, citing which persona.
 2. **Needs deeper investigation** — spawn a single Agent with the relevant persona (read its file fresh), providing the question, verdict, and follow-up. Use `model: "sonnet"`.
