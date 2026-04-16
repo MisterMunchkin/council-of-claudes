@@ -51,11 +51,11 @@ After writing the persona file, update the `/council` skill's `argument-hint` so
 
 ```bash
 PERSONAS_DIR=".council/personas"
-SKILL_FILE="skills/council/SKILL.md"
+SKILL_FILE="$HOME/.claude/skills/council/SKILL.md"
 if [ -d "$PERSONAS_DIR" ] && [ -f "$SKILL_FILE" ]; then
   NAMES=$(ls "$PERSONAS_DIR"/*.md 2>/dev/null | xargs -I{} basename {} .md | sort | paste -sd, -)
   if [ -n "$NAMES" ]; then
-    sed -i '' "s/^argument-hint: .*/argument-hint: [--personas $NAMES]/" "$SKILL_FILE"
+    sed -i.bak "s/^argument-hint: .*/argument-hint: [--all, --peer-review, --dashboard, --revisit, --personas $NAMES]/" "$SKILL_FILE" && rm -f "$SKILL_FILE.bak"
   fi
 fi
 ```
