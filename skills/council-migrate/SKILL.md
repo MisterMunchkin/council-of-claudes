@@ -23,7 +23,7 @@ SCAN_DIR="$(pwd)"
 # SCAN_DIR=<user-provided path>
 
 # Find all old-style session directories
-find "$SCAN_DIR" -path '*/.council/sessions/*/meta.json' -not -path '*/node_modules/*' -not -path '*/.git/*' 2>/dev/null
+find "$SCAN_DIR" -maxdepth 6 -path '*/.council/sessions/*/meta.json' -not -path '*/node_modules/*' -not -path '*/.git/*' 2>/dev/null
 ```
 
 If no old sessions are found, tell the user:
@@ -36,11 +36,17 @@ For each `meta.json` found, read it and extract the `project` and `project_dir` 
 
 ```bash
 # From meta.json:
-#   project_dir -> basename gives PROJECT_NAME
+#   project_dir -> resolve main worktree for consistent naming across worktrees
 #   session dir -> gives SESSION_ID
 # Target: ~/.council/{PROJECT_NAME}/sessions/{SESSION_ID}/
 
-PROJECT_NAME="$(basename "$PROJECT_DIR")"
+# Resolve main worktree so worktree sessions consolidate to one project
+if [ -d "$PROJECT_DIR" ]; then
+  MAIN_WT="$(git -C "$PROJECT_DIR" worktree list --porcelain 2>/dev/null | head -1 | sed 's/^worktree //')"
+  PROJECT_NAME="$(basename "${MAIN_WT:-$PROJECT_DIR}")"
+else
+  PROJECT_NAME="$(basename "$PROJECT_DIR")"
+fi
 TARGET="$HOME/.council/${PROJECT_NAME}/sessions/${SESSION_ID}"
 ```
 

@@ -82,8 +82,9 @@ cmd_status() {
         warn "  Not initialized — run /council-init in Claude Code"
     fi
 
-    local project_name session_base session_count=0
-    project_name="$(basename "$(pwd)")"
+    local main_worktree project_name session_base session_count=0
+    main_worktree="$(git worktree list --porcelain 2>/dev/null | head -1 | sed 's/^worktree //')"
+    project_name="$(basename "${main_worktree:-$(pwd)}")"
     session_base="${HOME}/.council/${project_name}/sessions"
     if [ -d "${session_base}" ]; then
         session_count=$(find "${session_base}" -name "meta.json" 2>/dev/null | wc -l | tr -d ' ')
@@ -190,6 +191,12 @@ cmd_install() {
     echo ""
     echo -e "  ${DIM}Personas are stored per-project in .council/personas/${NC}"
     echo -e "  ${DIM}Sessions are stored in ~/.council/{project}/sessions/${NC}"
+    echo ""
+    echo -e "  ${BOLD}Intent (for other projects):${NC}"
+    echo ""
+    echo -e "    ${DIM}Copy the intent skill so agents in other projects know about council:${NC}"
+    echo -e "    mkdir -p /path/to/project/.claude/skills/claude-council"
+    echo -e "    cp ${SCRIPT_DIR}/intent/SKILL.md /path/to/project/.claude/skills/claude-council/SKILL.md"
     echo ""
 }
 

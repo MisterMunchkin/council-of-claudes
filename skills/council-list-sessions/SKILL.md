@@ -12,10 +12,11 @@ Show a table of past council sessions for the current project.
 
 ### Step 1: Find sessions
 
-Derive the project name from the current working directory and look for sessions in the home directory:
+Derive the project name from the git repository's main worktree (so all worktrees of the same repo find the same sessions):
 
 ```bash
-PROJECT_NAME="$(basename "$(pwd)")"
+MAIN_WORKTREE="$(git worktree list --porcelain 2>/dev/null | head -1 | sed 's/^worktree //')"
+PROJECT_NAME="$(basename "${MAIN_WORKTREE:-$(pwd)}")"
 SESSION_BASE="$HOME/.council/${PROJECT_NAME}/sessions"
 ```
 
