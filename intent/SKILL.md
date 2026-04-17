@@ -24,6 +24,7 @@ Do NOT use council for:
 | `/council --with-review "question"` | Force peer review round before synthesis |
 | `/council --quick "question"` | Fast — opinions only, no chairman synthesis |
 | `/council --peer-review` | CI mode — auto-gathers PR diff, fully non-interactive |
+| `/council --peer-review --max-turns 30` | CI mode with turn budget — limits orchestrator turns for predictable CI runtime |
 | `/council --personas a,b "question"` | Limit to specific personas |
 | `/council --all "question"` | Force all personas (skip relevance triage) |
 | `/council --revisit SESSION_ID` | Reload a past deliberation for follow-up |

@@ -254,7 +254,7 @@ SKILL_FILE="$HOME/.claude/skills/council/SKILL.md"
 if [ -d "$PERSONAS_DIR" ] && [ -f "$SKILL_FILE" ]; then
   NAMES=$(ls "$PERSONAS_DIR"/*.md 2>/dev/null | xargs -I{} basename {} .md | sort | paste -sd, -)
   if [ -n "$NAMES" ]; then
-    sed -i.bak "s/^argument-hint: .*/argument-hint: [--all, --peer-review, --dashboard, --revisit, --personas $NAMES]/" "$SKILL_FILE" && rm -f "$SKILL_FILE.bak"
+    sed -i.bak "s/^argument-hint: .*/argument-hint: [--all, --peer-review, --dashboard, --revisit, --max-turns 25, --personas $NAMES]/" "$SKILL_FILE" && rm -f "$SKILL_FILE.bak"
   fi
 fi
 ```
@@ -654,7 +654,7 @@ For standard/with-review/peer-review modes:
 
 For `--quick` mode, show each persona's full opinion with headers.
 
-For `--peer-review` mode, use the same format as standard but add these sections:
+For `--peer-review` mode, use the same format as standard but replace the Confidence section with these sections:
 
 ```markdown
 ### Confidence Scores
